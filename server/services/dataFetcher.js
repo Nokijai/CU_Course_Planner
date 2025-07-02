@@ -170,15 +170,11 @@ class DataFetcher {
 
       const searchTerm = query ? query.toLowerCase() : '';
       const filteredCourses = courses.filter(course => {
-        // Text search
+        // Text search - only search by title and description
         if (searchTerm) {
           const searchableText = [
-            course.code || '',
-            course.fullCode || '',
-            course.subject || '',
             course.title || '',
-            course.description || '',
-            course.academic_group || ''
+            course.description || ''
           ].join(' ').toLowerCase();
           
           if (!searchableText.includes(searchTerm)) {
@@ -187,16 +183,28 @@ class DataFetcher {
         }
 
         // Apply filters
-        if (filters.academic_group && course.academic_group !== filters.academic_group) {
-          return false;
+        if (filters.subjects && filters.subjects.length > 0) {
+          if (!filters.subjects.includes(course.subject)) {
+            return false;
+          }
         }
         
-        if (filters.career && course.career !== filters.career) {
-          return false;
+        if (filters.academic_groups && filters.academic_groups.length > 0) {
+          if (!filters.academic_groups.includes(course.academic_group)) {
+            return false;
+          }
         }
         
-        if (filters.units && course.units !== filters.units) {
-          return false;
+        if (filters.careers && filters.careers.length > 0) {
+          if (!filters.careers.includes(course.career)) {
+            return false;
+          }
+        }
+        
+        if (filters.units && filters.units.length > 0) {
+          if (!filters.units.includes(course.units)) {
+            return false;
+          }
         }
 
         return true;
@@ -246,6 +254,54 @@ class DataFetcher {
       return Array.from(groups).sort();
     } catch (error) {
       console.error('Error getting academic groups:', error);
+      return [];
+    }
+  }
+
+  // Get career options
+  async getCareers() {
+    try {
+      const data = await this.getCourseData();
+      const { courses } = data;
+      
+      if (!courses || courses.length === 0) {
+        return [];
+      }
+      
+      const careers = new Set();
+      courses.forEach(course => {
+        if (course.career) {
+          careers.add(course.career);
+        }
+      });
+      
+      return Array.from(careers).sort();
+    } catch (error) {
+      console.error('Error getting careers:', error);
+      return [];
+    }
+  }
+
+  // Get unit options
+  async getUnits() {
+    try {
+      const data = await this.getCourseData();
+      const { courses } = data;
+      
+      if (!courses || courses.length === 0) {
+        return [];
+      }
+      
+      const units = new Set();
+      courses.forEach(course => {
+        if (course.units) {
+          units.add(course.units);
+        }
+      });
+      
+      return Array.from(units).sort((a, b) => parseFloat(a) - parseFloat(b));
+    } catch (error) {
+      console.error('Error getting units:', error);
       return [];
     }
   }

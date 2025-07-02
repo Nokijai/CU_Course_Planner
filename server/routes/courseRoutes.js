@@ -6,12 +6,13 @@ const router = express.Router();
 // GET /api/courses - Get all courses with optional search and filters
 router.get('/', async (req, res) => {
   try {
-    const { q: query, academic_group, career, units, limit = 50, offset = 0 } = req.query;
+    const { q: query, subjects, academic_groups, careers, units, limit = 50, offset = 0 } = req.query;
     
     const filters = {};
-    if (academic_group) filters.academic_group = academic_group;
-    if (career) filters.career = career;
-    if (units) filters.units = units;
+    if (subjects) filters.subjects = subjects.split(',');
+    if (academic_groups) filters.academic_groups = academic_groups.split(',');
+    if (careers) filters.careers = careers.split(',');
+    if (units) filters.units = units.split(',');
 
     const courses = await dataFetcher.searchCourses(query, filters);
     
@@ -57,6 +58,94 @@ router.get('/subjects', async (req, res) => {
   }
 });
 
+// GET /api/courses/academic-groups - Get all academic groups
+router.get('/academic-groups', async (req, res) => {
+  try {
+    const groups = await dataFetcher.getAcademicGroups();
+    
+    res.json({
+      success: true,
+      data: groups
+    });
+  } catch (error) {
+    console.error('Error fetching academic groups:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch academic groups'
+    });
+  }
+});
+
+// GET /api/courses/careers - Get all career options
+router.get('/careers', async (req, res) => {
+  try {
+    const careers = await dataFetcher.getCareers();
+    
+    res.json({
+      success: true,
+      data: careers
+    });
+  } catch (error) {
+    console.error('Error fetching careers:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch careers'
+    });
+  }
+});
+
+// GET /api/courses/units - Get all unit options
+router.get('/units', async (req, res) => {
+  try {
+    const units = await dataFetcher.getUnits();
+    
+    res.json({
+      success: true,
+      data: units
+    });
+  } catch (error) {
+    console.error('Error fetching units:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch units'
+    });
+  }
+});
+
+// GET /api/courses/debug/subjects - Debug endpoint to check available subjects
+router.get('/debug/subjects', async (req, res) => {
+  try {
+    const data = await dataFetcher.getCourseData();
+    const { courses } = data;
+    
+    const subjects = new Set();
+    courses.forEach(course => {
+      if (course.subject) {
+        subjects.add(course.subject);
+      }
+    });
+    
+    res.json({
+      success: true,
+      data: {
+        totalCourses: courses.length,
+        subjects: Array.from(subjects).sort(),
+        sampleCourses: courses.slice(0, 5).map(c => ({
+          fullCode: c.fullCode,
+          subject: c.subject,
+          title: c.title
+        }))
+      }
+    });
+  } catch (error) {
+    console.error('Error in debug endpoint:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get debug info'
+    });
+  }
+});
+
 // GET /api/courses/subjects/:subject - Get courses by subject code
 router.get('/subjects/:subject', async (req, res) => {
   try {
@@ -75,24 +164,6 @@ router.get('/subjects/:subject', async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Failed to fetch subject courses'
-    });
-  }
-});
-
-// GET /api/courses/academic-groups - Get all academic groups
-router.get('/academic-groups', async (req, res) => {
-  try {
-    const groups = await dataFetcher.getAcademicGroups();
-    
-    res.json({
-      success: true,
-      data: groups
-    });
-  } catch (error) {
-    console.error('Error fetching academic groups:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to fetch academic groups'
     });
   }
 });
@@ -176,6 +247,23 @@ router.get('/:id', async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Failed to fetch course'
+    });
+  }
+});
+
+// POST /api/courses/clear-cache - Clear the data cache
+router.post('/clear-cache', async (req, res) => {
+  try {
+    dataFetcher.clearCache();
+    res.json({
+      success: true,
+      message: 'Cache cleared successfully'
+    });
+  } catch (error) {
+    console.error('Error clearing cache:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to clear cache'
     });
   }
 });
