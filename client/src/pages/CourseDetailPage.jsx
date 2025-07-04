@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { getSchedule, saveSchedule, getFavorites, saveFavorites } from '../utils/localStorage';
-import { Calendar, Heart, Clock, BookOpen, Users, Award, ArrowLeft } from 'lucide-react';
+import { Calendar, Heart, Clock, BookOpen, Users, Award, ArrowLeft, Plus, X, Check } from 'lucide-react';
 
 function CourseDetailPage() {
   const { subject, code } = useParams();
@@ -12,6 +12,11 @@ function CourseDetailPage() {
   const [error, setError] = useState(null);
   const [isInSchedule, setIsInSchedule] = useState(false);
   const [isInFavorites, setIsInFavorites] = useState(false);
+  
+  // Section selection modal state
+  const [showSectionModal, setShowSectionModal] = useState(false);
+  const [selectedSections, setSelectedSections] = useState(new Set());
+  const [currentTerm, setCurrentTerm] = useState('');
 
   useEffect(() => {
     const fetchCourse = async () => {
@@ -37,6 +42,14 @@ function CourseDetailPage() {
     };
     fetchCourse();
   }, [subject, code]);
+
+  const handleBackClick = () => {
+    if (location.state) {
+      navigate(-1);
+    } else {
+      navigate('/search');
+    }
+  };
 
   const addToSchedule = () => {
     if (!course) return;
@@ -70,14 +83,149 @@ function CourseDetailPage() {
     setIsInFavorites(false);
   };
 
-  const handleBackClick = () => {
-    // If we have search state from the previous page, navigate back with that state
-    if (location.state) {
-      navigate(-1);
+  // Helper function to check if a section has subsections
+  const hasSubsections = (sectionName, sections) => {
+    // Extract the section prefix (e.g., "A" from "A-LEC", "--" from "--LEC")
+    const sectionPrefix = sectionName.split('-')[0];
+    
+    // Check if there are other sections that are related
+    const hasSubs = Object.keys(sections).some(name => {
+      if (name === sectionName) return false;
+      
+      const otherPrefix = name.split('-')[0];
+      
+      // Check for different relationship patterns:
+      // 1. Same prefix (e.g., A-LEC and A-TUT)
+      // 2. Main section with tutorial/lab (e.g., A-LEC and AT01-TUT)
+      // 3. Main section with tutorial/lab (e.g., B-LEC and BT01-TUT)
+      
+      let isRelated = false;
+      
+      // Pattern 1: Same prefix
+      if (otherPrefix === sectionPrefix) {
+        isRelated = true;
+      }
+      // Pattern 2: Main section (A-LEC) with tutorial (AT01-TUT)
+      else if (sectionPrefix.length === 1 && otherPrefix.startsWith(sectionPrefix) && otherPrefix.length > 1) {
+        isRelated = true;
+      }
+      // Pattern 3: Tutorial (AT01-TUT) with main section (A-LEC)
+      else if (otherPrefix.length === 1 && sectionPrefix.startsWith(otherPrefix) && sectionPrefix.length > 1) {
+        isRelated = true;
+      }
+      
+      return isRelated;
+    });
+    
+    return hasSubs;
+  };
+
+  // Helper function to get related subsections
+  const getRelatedSubsections = (sectionName, sections) => {
+    // Extract the section prefix (e.g., "A" from "A-LEC", "--" from "--LEC")
+    const sectionPrefix = sectionName.split('-')[0];
+    
+    // Return sections that are related based on the same patterns
+    return Object.entries(sections).filter(([name]) => {
+      if (name === sectionName) return false;
+      
+      const otherPrefix = name.split('-')[0];
+      
+      // Check for different relationship patterns:
+      // 1. Same prefix (e.g., A-LEC and A-TUT)
+      // 2. Main section with tutorial/lab (e.g., A-LEC and AT01-TUT)
+      // 3. Main section with tutorial/lab (e.g., B-LEC and BT01-TUT)
+      
+      // Pattern 1: Same prefix
+      if (otherPrefix === sectionPrefix) {
+        return true;
+      }
+      // Pattern 2: Main section (A-LEC) with tutorial (AT01-TUT)
+      else if (sectionPrefix.length === 1 && otherPrefix.startsWith(sectionPrefix) && otherPrefix.length > 1) {
+        return true;
+      }
+      // Pattern 3: Tutorial (AT01-TUT) with main section (A-LEC)
+      else if (otherPrefix.length === 1 && sectionPrefix.startsWith(otherPrefix) && sectionPrefix.length > 1) {
+        return true;
+      }
+      
+      return false;
+    });
+  };
+
+  // Open section selection modal
+  const openSectionModal = () => {
+    console.log('Opening modal for course:', course.subject, course.code);
+    
+    // Get the first term (or you could let user choose)
+    const firstTerm = Object.keys(course.terms)[0];
+    setCurrentTerm(firstTerm);
+    
+    // Pre-select sections that are already in schedule
+    const schedule = getSchedule() || [];
+    const scheduleCourse = schedule.find(c => c.subject === subject && c.code === code);
+    if (scheduleCourse && scheduleCourse.selectedSections) {
+      setSelectedSections(new Set(scheduleCourse.selectedSections));
     } else {
-      // Fallback to search page without state
-      navigate('/search');
+      setSelectedSections(new Set());
     }
+    
+    setShowSectionModal(true);
+  };
+
+  // Close section selection modal
+  const closeSectionModal = () => {
+    setShowSectionModal(false);
+    setSelectedSections(new Set());
+    setCurrentTerm('');
+  };
+
+  // Toggle section selection
+  const toggleSectionSelection = (sectionName) => {
+    console.log('Toggling section:', sectionName);
+    const newSelected = new Set(selectedSections);
+    if (newSelected.has(sectionName)) {
+      newSelected.delete(sectionName);
+      console.log('Removed section:', sectionName);
+    } else {
+      newSelected.add(sectionName);
+      console.log('Added section:', sectionName);
+    }
+    console.log('Current selected sections:', Array.from(newSelected));
+    setSelectedSections(newSelected);
+  };
+
+  // Add selected sections to schedule
+  const addSelectedSectionsToSchedule = () => {
+    if (!course || selectedSections.size === 0) return;
+    
+    console.log('Adding sections to schedule:', Array.from(selectedSections));
+    console.log('Current course:', course.subject, course.code);
+    
+    const schedule = getSchedule() || [];
+    const existingCourseIndex = schedule.findIndex(c => c.subject === subject && c.code === code);
+    
+    if (existingCourseIndex >= 0) {
+      // Course already exists, update its sections
+      const updatedCourse = {
+        ...schedule[existingCourseIndex],
+        selectedSections: Array.from(selectedSections)
+      };
+      schedule[existingCourseIndex] = updatedCourse;
+      console.log('Updated existing course with sections:', updatedCourse.selectedSections);
+    } else {
+      // Add new course with selected sections
+      const newCourse = {
+        ...course,
+        selectedSections: Array.from(selectedSections)
+      };
+      schedule.push(newCourse);
+      console.log('Added new course with sections:', newCourse.selectedSections);
+    }
+    
+    saveSchedule(schedule);
+    setIsInSchedule(true);
+    closeSectionModal();
   };
 
   if (loading) return (
@@ -125,10 +273,10 @@ function CourseDetailPage() {
           </div>
           <div className="flex gap-2">
             <button
-              onClick={isInSchedule ? removeFromSchedule : addToSchedule}
+              onClick={isInSchedule ? removeFromSchedule : openSectionModal}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
-                isInSchedule 
-                  ? 'bg-red-100 text-red-700 hover:bg-red-200' 
+                isInSchedule
+                  ? 'bg-red-100 text-red-700 hover:bg-red-200'
                   : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
               }`}
             >
@@ -138,8 +286,8 @@ function CourseDetailPage() {
             <button
               onClick={isInFavorites ? removeFromFavorites : addToFavorites}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
-                isInFavorites 
-                  ? 'bg-red-100 text-red-700 hover:bg-red-200' 
+                isInFavorites
+                  ? 'bg-pink-100 text-red-700 hover:bg-pink-200'
                   : 'bg-pink-100 text-pink-700 hover:bg-pink-200'
               }`}
             >
@@ -148,14 +296,13 @@ function CourseDetailPage() {
             </button>
           </div>
         </div>
-
-        {/* Course Info Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+        
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="flex items-center gap-3">
-            <Users className="h-5 w-5 text-gray-500" />
+            <Award className="h-5 w-5 text-gray-500" />
             <div>
-              <div className="text-sm text-gray-500">Instructor</div>
-              <div className="font-medium">{course.instructor || 'TBA'}</div>
+              <div className="text-sm text-gray-500">Academic Group</div>
+              <div className="font-medium">{course.academic_group || 'N/A'}</div>
             </div>
           </div>
           <div className="flex items-center gap-3">
@@ -173,93 +320,174 @@ function CourseDetailPage() {
             </div>
           </div>
         </div>
+      </div>
 
-        {/* Description */}
-        {course.description && (
-          <div className="mb-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">Description</h3>
-            <p className="text-gray-700 leading-relaxed">{course.description}</p>
-          </div>
-        )}
+      {/* Description */}
+      {course.description && (
+        <div className="mb-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">Description</h3>
+          <p className="text-gray-700 leading-relaxed">{course.description}</p>
+        </div>
+      )}
 
-        {/* Learning Outcomes */}
-        {course.outcome && (
-          <div className="mb-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">Learning Outcomes</h3>
-            <p className="text-gray-700 leading-relaxed">{course.outcome}</p>
-          </div>
-        )}
-
-        {/* Syllabus */}
-        {course.syllabus && (
-          <div className="mb-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">Syllabus</h3>
-            <p className="text-gray-700 leading-relaxed">{course.syllabus}</p>
-          </div>
-        )}
-
-        {/* Requirements */}
-        {course.requirements && (
-          <div className="mb-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">Requirements</h3>
-            <p className="text-gray-700">{course.requirements}</p>
-          </div>
-        )}
-
-        {/* Assessments */}
-        {course.assessments && Object.keys(course.assessments).length > 0 && (
-          <div className="mb-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">Assessments</h3>
-            <div className="bg-gray-50 rounded-lg p-4">
-              {Object.entries(course.assessments).map(([type, percentage]) => (
-                <div key={type} className="flex justify-between items-center py-2 border-b border-gray-200 last:border-b-0">
-                  <span className="text-gray-700">{type}</span>
-                  <span className="font-medium text-gray-900">{percentage}%</span>
+      {/* Terms and Sections */}
+      {course.terms && Object.keys(course.terms).length > 0 && (
+        <div>
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">Terms and Sections</h3>
+          <div className="space-y-4">
+            {Object.entries(course.terms).map(([termName, sections]) => (
+              <div key={termName} className="bg-gray-50 rounded-lg p-4">
+                <h4 className="font-medium text-gray-900 mb-3">{termName}</h4>
+                <div className="space-y-3">
+                  {Object.entries(sections).map(([sectionName, section]) => (
+                    <div key={sectionName} className="border-l-4 border-blue-500 pl-4">
+                      <div className="font-medium text-gray-800 mb-1">{sectionName}</div>
+                      {section.days && section.startTimes && section.endTimes && (
+                        <div className="text-sm text-gray-600">
+                          {section.days.map((day, index) => {
+                            const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+                            return (
+                              <div key={index}>
+                                {dayNames[day - 1]} {section.startTimes[index]}-{section.endTimes[index]}
+                                {section.locations && section.locations[index] && ` • ${section.locations[index]}`}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                      {section.instructors && section.instructors.length > 0 && (
+                        <div className="text-sm text-gray-600 mt-1">
+                          Instructor: {section.instructors.join(', ')}
+                        </div>
+                      )}
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              </div>
+            ))}
           </div>
-        )}
+        </div>
+      )}
 
-        {/* Terms and Sections */}
-        {course.terms && Object.keys(course.terms).length > 0 && (
-          <div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">Terms and Sections</h3>
-            <div className="space-y-4">
-              {Object.entries(course.terms).map(([termName, sections]) => (
-                <div key={termName} className="bg-gray-50 rounded-lg p-4">
-                  <h4 className="font-medium text-gray-900 mb-3">{termName}</h4>
-                  <div className="space-y-3">
-                    {Object.entries(sections).map(([sectionName, section]) => (
-                      <div key={sectionName} className="border-l-4 border-blue-500 pl-4">
-                        <div className="font-medium text-gray-800 mb-1">{sectionName}</div>
-                        {section.days && section.startTimes && section.endTimes && (
-                          <div className="text-sm text-gray-600">
-                            {section.days.map((day, index) => {
-                              const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-                              return (
-                                <div key={index}>
-                                  {dayNames[day - 1]} {section.startTimes[index]}-{section.endTimes[index]}
-                                  {section.locations && section.locations[index] && ` • ${section.locations[index]}`}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                        {section.instructors && section.instructors.length > 0 && (
-                          <div className="text-sm text-gray-600 mt-1">
-                            Instructor: {section.instructors.join(', ')}
-                          </div>
+      {/* Section Selection Modal */}
+      {showSectionModal && course && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-8 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-semibold text-gray-900">
+                Select Sections for {course.subject} {course.code}
+              </h2>
+              <button
+                onClick={closeSectionModal}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+            
+            <div className="mb-4">
+              <h3 className="text-lg font-medium text-gray-700 mb-2">{currentTerm}</h3>
+              <p className="text-sm text-gray-600 mb-4">
+                Select the sections you want to add to your schedule. Related sections (lectures, tutorials, labs) are grouped together.
+              </p>
+            </div>
+
+            <div className="space-y-4 mb-6">
+              {Object.entries(course.terms[currentTerm]).map(([sectionName, section]) => {
+                const isSelected = selectedSections.has(sectionName);
+                const hasSubs = hasSubsections(sectionName, course.terms[currentTerm]);
+                const relatedSubsections = hasSubs ? getRelatedSubsections(sectionName, course.terms[currentTerm]) : [];
+                
+                return (
+                  <div key={sectionName} className="border border-gray-200 rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center space-x-3">
+                        <button
+                          onClick={() => toggleSectionSelection(sectionName)}
+                          className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
+                            isSelected 
+                              ? 'bg-blue-600 border-blue-600 text-white' 
+                              : 'border-gray-300 hover:border-blue-400'
+                          }`}
+                        >
+                          {isSelected && <Check className="h-3 w-3" />}
+                        </button>
+                        <span className="font-medium text-gray-900">{sectionName}</span>
+                        {hasSubs && (
+                          <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
+                            Main Section
+                          </span>
                         )}
                       </div>
-                    ))}
+                    </div>
+                    
+                    {/* Section details */}
+                    <div className="ml-8 text-sm text-gray-600">
+                      {section.days && section.startTimes && section.endTimes && (
+                        <div className="mb-2">
+                          {section.days.map((day, index) => {
+                            const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+                            return (
+                              <div key={index} className="flex items-center space-x-2">
+                                <Clock className="h-3 w-3" />
+                                <span>
+                                  {dayNames[day - 1]} {section.startTimes[index]}-{section.endTimes[index]}
+                                  {section.locations && section.locations[index] && ` • ${section.locations[index]}`}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                      
+                      {section.instructors && section.instructors.length > 0 && (
+                        <div className="flex items-center space-x-2 mb-2">
+                          <Users className="h-3 w-3" />
+                          <span>Instructor: {section.instructors.join(', ')}</span>
+                        </div>
+                      )}
+                      
+                      {/* Show related subsections */}
+                      {hasSubs && relatedSubsections.length > 0 && (
+                        <div className="mt-3 pt-3 border-t border-gray-100">
+                          <div className="text-xs text-gray-500 font-medium mb-2">Related Sessions:</div>
+                          <div className="space-y-2">
+                            {relatedSubsections.map(([subName, subSection]) => (
+                              <div key={subName} className="text-xs text-gray-600 ml-2">
+                                • {subName}: {subSection.days?.map((day, idx) => {
+                                  const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+                                  return `${dayNames[day - 1]} ${subSection.startTimes?.[idx]}-${subSection.endTimes?.[idx]}`;
+                                }).join(', ')}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
+            </div>
+
+            <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
+              <button
+                onClick={closeSectionModal}
+                className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg font-medium transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={addSelectedSectionsToSchedule}
+                disabled={selectedSections.size === 0}
+                className="px-6 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center space-x-2"
+              >
+                <Plus className="h-4 w-4" />
+                <span>Add {selectedSections.size} Section{selectedSections.size !== 1 ? 's' : ''} to Schedule</span>
+              </button>
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
