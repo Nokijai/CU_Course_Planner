@@ -154,8 +154,8 @@ class DataFetcher {
     });
   }
 
-  // Search courses by query with better performance
-  async searchCourses(query, filters = {}) {
+  // Search courses by query with better performance and intelligent scoring
+  async searchCourses(query, filters = {}, pagination = {}) {
     try {
       const data = await this.getCourseData();
       const { courses } = data;
@@ -168,21 +168,11 @@ class DataFetcher {
         return courses.slice(0, 100); // Return first 100 courses if no search
       }
 
-      const searchTerm = query ? query.toLowerCase() : '';
+      const searchTerm = query ? query.toLowerCase().trim() : '';
+      
+      // First, filter courses based on search term and filters
       const filteredCourses = courses.filter(course => {
-        // Text search - only search by title and description
-        if (searchTerm) {
-          const searchableText = [
-            course.title || '',
-            course.description || ''
-          ].join(' ').toLowerCase();
-          
-          if (!searchableText.includes(searchTerm)) {
-            return false;
-          }
-        }
-
-        // Apply filters
+        // Apply filters first
         if (filters.subjects && filters.subjects.length > 0) {
           if (!filters.subjects.includes(course.subject)) {
             return false;
@@ -207,13 +197,135 @@ class DataFetcher {
           }
         }
 
-        return true;
+        // If no search term, return true (filters only)
+        if (!searchTerm) {
+          return true;
+        }
+
+        // Check if course matches search term
+        const fullCode = (course.fullCode || '').toLowerCase();
+        const subject = (course.subject || '').toLowerCase();
+        const code = (course.code || '').toLowerCase();
+        const title = (course.title || '').toLowerCase();
+        const description = (course.description || '').toLowerCase();
+
+        // Priority 1: Exact full code match (highest priority)
+        if (fullCode === searchTerm) {
+          return true;
+        }
+
+        // Priority 2: Full code starts with search term
+        if (fullCode.startsWith(searchTerm)) {
+          return true;
+        }
+
+        // Priority 3: Subject starts with search term
+        if (subject.startsWith(searchTerm)) {
+          return true;
+        }
+
+        // Priority 4: Code starts with search term
+        if (code.startsWith(searchTerm)) {
+          return true;
+        }
+
+        // Priority 5: Title or description contains search term (lowest priority)
+        if (title.includes(searchTerm) || description.includes(searchTerm)) {
+          return true;
+        }
+
+        return false;
       });
 
-      return filteredCourses;
+      // Score and sort the filtered courses
+      const scoredCourses = filteredCourses.map(course => {
+        const fullCode = (course.fullCode || '').toLowerCase();
+        const subject = (course.subject || '').toLowerCase();
+        const code = (course.code || '').toLowerCase();
+        const title = (course.title || '').toLowerCase();
+        const description = (course.description || '').toLowerCase();
+
+        let score = 0;
+
+        // Scoring system (higher score = higher priority)
+        if (fullCode === searchTerm) {
+          score += 1000; // Exact full code match
+        } else if (fullCode.startsWith(searchTerm)) {
+          score += 500; // Full code starts with search term
+        } else if (subject.startsWith(searchTerm)) {
+          score += 300; // Subject starts with search term
+        } else if (code.startsWith(searchTerm)) {
+          score += 200; // Code starts with search term
+        } else if (title.includes(searchTerm)) {
+          score += 50; // Title contains search term
+        } else if (description.includes(searchTerm)) {
+          score += 10; // Description contains search term
+        }
+
+        // Bonus for shorter matches (more specific)
+        if (fullCode.startsWith(searchTerm)) {
+          score += (fullCode.length - searchTerm.length) * -1;
+        }
+
+        return { ...course, _searchScore: score };
+      });
+
+      // Sort by score (highest first), then by course number (ascending), then by subject
+      const sortedCourses = scoredCourses
+        .sort((a, b) => {
+          // First sort by search score (highest first)
+          if (b._searchScore !== a._searchScore) {
+            return b._searchScore - a._searchScore;
+          }
+          
+          // If same score, sort by subject alphabetically
+          if (a.subject !== b.subject) {
+            return a.subject.localeCompare(b.subject);
+          }
+          
+          // If same subject, sort by course number numerically
+          const aCode = parseInt(a.code) || 0;
+          const bCode = parseInt(b.code) || 0;
+          return aCode - bCode;
+        })
+        .map(({ _searchScore, ...course }) => course);
+
+      // Apply pagination
+      const { page = 1, limit = 25 } = pagination;
+      const pageSize = Math.min(Math.max(parseInt(limit), 1), 100); // Limit max page size to 100
+      const currentPage = Math.max(parseInt(page), 1);
+      const startIndex = (currentPage - 1) * pageSize;
+      const endIndex = startIndex + pageSize;
+      
+      const totalCourses = sortedCourses.length;
+      const totalPages = Math.ceil(totalCourses / pageSize);
+      const paginatedCourses = sortedCourses.slice(startIndex, endIndex);
+
+      return {
+        courses: paginatedCourses,
+        pagination: {
+          currentPage,
+          pageSize,
+          totalCourses,
+          totalPages,
+          hasNextPage: currentPage < totalPages,
+          hasPrevPage: currentPage > 1
+        }
+      };
+
     } catch (error) {
       console.error('Error searching courses:', error);
-      return [];
+      return {
+        courses: [],
+        pagination: {
+          currentPage: 1,
+          pageSize: 25,
+          totalCourses: 0,
+          totalPages: 0,
+          hasNextPage: false,
+          hasPrevPage: false
+        }
+      };
     }
   }
 

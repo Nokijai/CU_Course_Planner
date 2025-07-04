@@ -6,7 +6,7 @@ const router = express.Router();
 // GET /api/courses - Get all courses with optional search and filters
 router.get('/', async (req, res) => {
   try {
-    const { q: query, subjects, academic_groups, careers, units, limit = 50, offset = 0 } = req.query;
+    const { q: query, subjects, academic_groups, careers, units, page = 1, limit = 25 } = req.query;
     
     const filters = {};
     if (subjects) filters.subjects = subjects.split(',');
@@ -14,22 +14,16 @@ router.get('/', async (req, res) => {
     if (careers) filters.careers = careers.split(',');
     if (units) filters.units = units.split(',');
 
-    const courses = await dataFetcher.searchCourses(query, filters);
-    
-    // Apply pagination
-    const startIndex = parseInt(offset);
-    const endIndex = startIndex + parseInt(limit);
-    const paginatedCourses = courses.slice(startIndex, endIndex);
+    const pagination = {
+      page: parseInt(page),
+      limit: parseInt(limit)
+    };
+
+    const result = await dataFetcher.searchCourses(query, filters, pagination);
     
     res.json({
       success: true,
-      data: {
-        courses: paginatedCourses,
-        total: courses.length,
-        limit: parseInt(limit),
-        offset: startIndex,
-        hasMore: endIndex < courses.length
-      }
+      data: result
     });
   } catch (error) {
     console.error('Error fetching courses:', error);

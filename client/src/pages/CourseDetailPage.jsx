@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { getSchedule, saveSchedule, getFavorites, saveFavorites } from '../utils/localStorage';
-import { Calendar, Heart, Clock, BookOpen, Users, Award } from 'lucide-react';
+import { Calendar, Heart, Clock, BookOpen, Users, Award, ArrowLeft } from 'lucide-react';
 
 function CourseDetailPage() {
   const { subject, code } = useParams();
+  const navigate = useNavigate();
+  const location = useLocation();
   const [course, setCourse] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -68,6 +70,16 @@ function CourseDetailPage() {
     setIsInFavorites(false);
   };
 
+  const handleBackClick = () => {
+    // If we have search state from the previous page, navigate back with that state
+    if (location.state) {
+      navigate(-1);
+    } else {
+      // Fallback to search page without state
+      navigate('/search');
+    }
+  };
+
   if (loading) return (
     <div className="max-w-3xl mx-auto p-4">
       <div className="animate-pulse">
@@ -91,6 +103,17 @@ function CourseDetailPage() {
 
   return (
     <div className="max-w-4xl mx-auto p-4">
+      {/* Back Button */}
+      <div className="mb-4">
+        <button
+          onClick={handleBackClick}
+          className="flex items-center gap-2 text-blue-600 hover:text-blue-800 font-medium"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back to Search
+        </button>
+      </div>
+      
       {/* Course Header */}
       <div className="bg-white rounded-lg shadow-sm border p-6 mb-6">
         <div className="flex justify-between items-start mb-4">
