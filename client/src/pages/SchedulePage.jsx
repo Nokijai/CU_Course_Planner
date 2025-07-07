@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Calendar, Clock, Users, BookOpen, Trash2, AlertTriangle, CheckCircle, Download, Upload, AlertCircle } from 'lucide-react';
+import { Calendar, Clock, Users, BookOpen, Trash2, AlertTriangle, CheckCircle, Download, Upload, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import { getSchedule, saveSchedule, exportSchedule, importSchedule } from '../utils/localStorage';
 import { validateSchedule } from '../utils/scheduleValidator';
 import CourseSearchBox from '../components/CourseSearchBox';
@@ -11,10 +11,17 @@ function SchedulePage() {
   const [totalCredits, setTotalCredits] = useState(0);
   const [hoveredSlot, setHoveredSlot] = useState(null);
   const [selectedConflictSlots, setSelectedConflictSlots] = useState({});
+  const [visibleCourses, setVisibleCourses] = useState(new Set()); // Track which courses are visible in timetable
 
   useEffect(() => {
     const savedSchedule = getSchedule() || [];
     setSchedule(savedSchedule);
+    
+    // Initialize all courses as visible by default
+    const initialVisibleCourses = new Set(
+      savedSchedule.map(course => `${course.subject}-${course.code}`)
+    );
+    setVisibleCourses(initialVisibleCourses);
     
     // Calculate total units
     const units = savedSchedule.reduce((sum, course) => sum + (parseFloat(course.units) || 0), 0);
@@ -29,6 +36,13 @@ function SchedulePage() {
     const updated = schedule.filter(c => c.subject !== subject || c.code !== code);
     setSchedule(updated);
     saveSchedule(updated);
+    
+    // Remove course from visible set
+    setVisibleCourses(prev => {
+      const newSet = new Set(prev);
+      newSet.delete(`${subject}-${code}`);
+      return newSet;
+    });
     
     // Recalculate units and conflicts
     const units = updated.reduce((sum, course) => sum + (parseFloat(course.units) || 0), 0);
@@ -49,6 +63,12 @@ function SchedulePage() {
         setSchedule(importedSchedule);
         saveSchedule(importedSchedule);
         
+        // Set all imported courses as visible
+        const importedVisibleCourses = new Set(
+          importedSchedule.map(course => `${course.subject}-${course.code}`)
+        );
+        setVisibleCourses(importedVisibleCourses);
+        
         const units = importedSchedule.reduce((sum, course) => sum + (parseFloat(course.units) || 0), 0);
         setTotalCredits(units);
         
@@ -64,6 +84,7 @@ function SchedulePage() {
       saveSchedule([]);
       setTotalCredits(0);
       setConflicts([]);
+      setVisibleCourses(new Set());
     }
   };
 
@@ -71,6 +92,15 @@ function SchedulePage() {
     // Refresh schedule data after a course is added or removed
     const savedSchedule = getSchedule() || [];
     setSchedule(savedSchedule);
+    
+    // Add new courses to visible set
+    setVisibleCourses(prev => {
+      const newSet = new Set(prev);
+      savedSchedule.forEach(c => {
+        newSet.add(`${c.subject}-${c.code}`);
+      });
+      return newSet;
+    });
     
     // Recalculate units and conflicts
     const units = savedSchedule.reduce((sum, course) => sum + (parseFloat(course.units) || 0), 0);
@@ -224,10 +254,36 @@ function SchedulePage() {
     });
   };
 
+  // Function to toggle course visibility
+  const toggleCourseVisibility = (subject, code) => {
+    const courseKey = `${subject}-${code}`;
+    setVisibleCourses(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(courseKey)) {
+        newSet.delete(courseKey);
+      } else {
+        newSet.add(courseKey);
+      }
+      return newSet;
+    });
+  };
+
+  // Function to check if a course is visible
+  const isCourseVisible = (subject, code) => {
+    return visibleCourses.has(`${subject}-${code}`);
+  };
+
   // Get course time slots for the timetable
   const courseTimeSlots = (() => {
     const slots = [];
+    let slotIdCounter = 0; // Global counter for unique slot IDs
+    
     schedule.forEach((course, courseIndex) => {
+      // Only include courses that are visible
+      if (!isCourseVisible(course.subject, course.code)) {
+        return;
+      }
+      
       // Handle courses with sections (from course detail view)
       if (course.sections) {
         Object.entries(course.sections).forEach(([term, termSections]) => {
@@ -240,6 +296,7 @@ function SchedulePage() {
                   const duration = getDurationInSlots(scheduleItem.startTime, scheduleItem.endTime);
                   
                   slots.push({
+                    id: `slot-${++slotIdCounter}`, // Unique identifier
                     course,
                     section: sectionName,
                     dayName,
@@ -267,6 +324,7 @@ function SchedulePage() {
             const duration = getDurationInSlots(scheduleItem.startTime, scheduleItem.endTime);
             
             slots.push({
+              id: `slot-${++slotIdCounter}`, // Unique identifier
               course,
               section: course.selectedSection || 'Unknown',
               dayName,
@@ -317,6 +375,8 @@ function SchedulePage() {
     setSelectedConflictIndex(day, timeIndex, newIndex);
   };
 
+
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -344,7 +404,7 @@ function SchedulePage() {
               <h2 className="text-lg font-semibold text-gray-900">Weekly Schedule</h2>
               <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-sm text-gray-600">
                 <span>Units: <span className="font-semibold">{totalCredits}</span></span>
-                <span>Courses: <span className="font-semibold">{schedule.length}</span></span>
+                <span>Courses: <span className="font-semibold">{visibleCourses.size}/{schedule.length}</span></span>
                 <span>Conflicts: <span className="font-semibold text-red-600">{conflicts.length}</span></span>
               </div>
             </div>
@@ -403,7 +463,7 @@ function SchedulePage() {
                           
                           {/* Non-conflicting slots */}
                           {nonConflictingSlots.map((slot, slotIndex) => {
-                            const uniqueKey = `${slot.course.subject}-${slot.course.code}-${slot.section}-${slot.day}-${slot.startTime}-${slotIndex}`;
+                            const uniqueKey = slot.id; // Use the unique slot ID
                             const isHovered = hoveredSlot === uniqueKey;
                             const colorClass = courseColors[slot.colorIndex];
                             const [bgColor, borderColor, textColor, hoverBgColor] = colorClass.split(' ');
@@ -416,7 +476,7 @@ function SchedulePage() {
                                 }`}
                                 style={{
                                   height: isHovered ? 'auto' : `${Math.max(48, slot.duration * 48)}px`,
-                                  minHeight: isHovered ? '120px' : `${Math.max(48, slot.duration * 48)}px`,
+                                  minHeight: isHovered ? '150px' : `${Math.max(48, slot.duration * 48)}px`,
                                   width: 'calc(100% - 8px)',
                                   maxWidth: 'calc(100% - 8px)',
                                   whiteSpace: isHovered ? 'normal' : 'nowrap',
@@ -503,7 +563,7 @@ function SchedulePage() {
                               )}
                               
                               {conflictingSlots.map((slot, stackIndex) => {
-                                const uniqueKey = `conflict-${slot.course.subject}-${slot.course.code}-${slot.section}-${slot.day}-${slot.startTime}-${stackIndex}`;
+                                const uniqueKey = `conflict-${slot.id}`; // Use the unique slot ID with conflict prefix
                                 const isHovered = hoveredSlot === uniqueKey;
                                 const colorClass = courseColors[slot.colorIndex];
                                 const [bgColor, borderColor, textColor, hoverBgColor] = colorClass.split(' ');
@@ -654,13 +714,32 @@ function SchedulePage() {
                   />
                 </label>
                 {schedule.length > 0 && (
-                  <button
-                    onClick={clearSchedule}
-                    className="p-2 text-red-600 hover:bg-red-50 rounded transition-colors"
-                    title="Clear All"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+                  <>
+                    <button
+                      onClick={() => {
+                        const allCourses = new Set(schedule.map(c => `${c.subject}-${c.code}`));
+                        setVisibleCourses(allCourses);
+                      }}
+                      className="p-2 text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                      title="Show All Courses"
+                    >
+                      <Eye className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={() => setVisibleCourses(new Set())}
+                      className="p-2 text-gray-600 hover:bg-gray-50 rounded transition-colors"
+                      title="Hide All Courses"
+                    >
+                      <EyeOff className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={clearSchedule}
+                      className="p-2 text-red-600 hover:bg-red-50 rounded transition-colors"
+                      title="Clear All"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </>
                 )}
               </div>
             </div>
@@ -670,31 +749,56 @@ function SchedulePage() {
           <div className="flex-1 overflow-y-auto">
             {schedule.length > 0 ? (
               <div className="p-4 space-y-3">
-                {schedule.map(course => (
-                  <div key={`${course.subject}-${course.code}`} className="p-3 bg-gray-50 rounded-lg border">
-                    <div className="flex justify-between items-start">
-                      <div className="flex-1 min-w-0">
-                      <Link
-                        to={`/course/${course.subject}/${course.code}`}
-                          className="font-medium text-blue-600 hover:text-blue-800 hover:underline text-sm block truncate"
-                      >
-                        {course.subject}{course.code}
-                      </Link>
-                        <div className="text-xs text-gray-600 mt-1">
-                          <div className="truncate">{course.title}</div>
-                          <div className="text-gray-500">{course.units} units</div>
+                {schedule.map(course => {
+                  const courseKey = `${course.subject}-${course.code}`;
+                  const isVisible = isCourseVisible(course.subject, course.code);
+                  
+                  return (
+                    <div key={courseKey} className="p-3 bg-gray-50 rounded-lg border">
+                      <div className="flex justify-between items-start">
+                        <div className="flex items-start gap-2 flex-1 min-w-0">
+                          {/* Visibility Toggle Checkbox */}
+                          <button
+                            onClick={() => toggleCourseVisibility(course.subject, course.code)}
+                            className={`mt-0.5 p-1 rounded transition-colors flex-shrink-0 ${
+                              isVisible 
+                                ? 'text-blue-600 hover:bg-blue-50' 
+                                : 'text-gray-400 hover:bg-gray-100'
+                            }`}
+                            title={isVisible ? 'Hide from timetable' : 'Show in timetable'}
+                          >
+                            {isVisible ? (
+                              <Eye className="h-4 w-4" />
+                            ) : (
+                              <EyeOff className="h-4 w-4" />
+                            )}
+                          </button>
+                          
+                          <div className="flex-1 min-w-0">
+                            <Link
+                              to={`/course/${course.subject}/${course.code}`}
+                              className="font-medium text-blue-600 hover:text-blue-800 hover:underline text-sm block truncate"
+                            >
+                              {course.subject}{course.code}
+                            </Link>
+                            <div className="text-xs text-gray-600 mt-1">
+                              <div className="truncate">{course.title}</div>
+                              <div className="text-gray-500">{course.units} units</div>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <button
+                          onClick={() => removeCourse(course.subject, course.code)}
+                          className="ml-2 p-1 text-red-600 hover:bg-red-50 rounded transition-colors flex-shrink-0"
+                          title="Remove from schedule"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
                       </div>
                     </div>
-                    <button
-                      onClick={() => removeCourse(course.subject, course.code)}
-                        className="ml-2 p-1 text-red-600 hover:bg-red-50 rounded transition-colors flex-shrink-0"
-                      title="Remove from schedule"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <div className="flex items-center justify-center h-full text-center p-4">
