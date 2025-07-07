@@ -165,7 +165,17 @@ class DataFetcher {
       }
       
       if (!query && Object.keys(filters).length === 0) {
-        return courses.slice(0, 100); // Return first 100 courses if no search
+        return {
+          courses: courses.slice(0, 100), // Return first 100 courses if no search
+          pagination: {
+            currentPage: 1,
+            pageSize: 100,
+            totalCourses: courses.length,
+            totalPages: Math.ceil(courses.length / 100),
+            hasNextPage: courses.length > 100,
+            hasPrevPage: false
+          }
+        };
       }
 
       const searchTerm = query ? query.toLowerCase().trim() : '';
@@ -202,13 +212,12 @@ class DataFetcher {
           return true;
         }
 
-        // Check if course matches search term
+        // Check if course matches search term - ONLY course codes and subjects
         const fullCode = (course.fullCode || '').toLowerCase();
         const subject = (course.subject || '').toLowerCase();
         const code = (course.code || '').toLowerCase();
-        const title = (course.title || '').toLowerCase();
-        const description = (course.description || '').toLowerCase();
 
+        // Only match course codes and subjects, not titles or descriptions
         // Priority 1: Exact full code match (highest priority)
         if (fullCode === searchTerm) {
           return true;
@@ -229,11 +238,6 @@ class DataFetcher {
           return true;
         }
 
-        // Priority 5: Title or description contains search term (lowest priority)
-        if (title.includes(searchTerm) || description.includes(searchTerm)) {
-          return true;
-        }
-
         return false;
       });
 
@@ -242,12 +246,10 @@ class DataFetcher {
         const fullCode = (course.fullCode || '').toLowerCase();
         const subject = (course.subject || '').toLowerCase();
         const code = (course.code || '').toLowerCase();
-        const title = (course.title || '').toLowerCase();
-        const description = (course.description || '').toLowerCase();
 
         let score = 0;
 
-        // Scoring system (higher score = higher priority)
+        // Scoring system (higher score = higher priority) - ONLY course codes and subjects
         if (fullCode === searchTerm) {
           score += 1000; // Exact full code match
         } else if (fullCode.startsWith(searchTerm)) {
@@ -256,10 +258,6 @@ class DataFetcher {
           score += 300; // Subject starts with search term
         } else if (code.startsWith(searchTerm)) {
           score += 200; // Code starts with search term
-        } else if (title.includes(searchTerm)) {
-          score += 50; // Title contains search term
-        } else if (description.includes(searchTerm)) {
-          score += 10; // Description contains search term
         }
 
         // Bonus for shorter matches (more specific)

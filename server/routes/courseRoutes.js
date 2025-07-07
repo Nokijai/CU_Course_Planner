@@ -219,6 +219,31 @@ router.get('/:subject/:code', async (req, res) => {
   }
 });
 
+// GET /api/courses/:subject/:code/details - Get course details with sections
+router.get('/:subject/:code/details', async (req, res) => {
+  try {
+    const subject = req.params.subject.toUpperCase();
+    const code = req.params.code;
+    const course = await dataFetcher.getCourseBySubjectAndCode(subject, code);
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        error: 'Course not found'
+      });
+    }
+    res.json({
+      success: true,
+      data: course
+    });
+  } catch (error) {
+    console.error('Error fetching course details:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch course details'
+    });
+  }
+});
+
 // GET /api/courses/:id - Get course by ID
 router.get('/:id', async (req, res) => {
   try {

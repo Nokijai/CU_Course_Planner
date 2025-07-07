@@ -72,6 +72,37 @@
   .badge-error {
     @apply bg-red-100 text-red-800;
   }
+  
+  /* Timetable container styles */
+  .timetable-container {
+    @apply w-full h-full overflow-auto;
+  }
+  
+  .timetable-container .grid {
+    @apply min-w-max;
+  }
+  
+  /* Ensure timetable cells maintain proper sizing */
+  .timetable-container .grid > div {
+    @apply min-w-0;
+  }
+  
+  /* Responsive adjustments for smaller screens */
+  @media (max-width: 1024px) {
+    .timetable-container {
+      @apply text-xs;
+    }
+    
+    .timetable-container .grid > div {
+      @apply min-w-16;
+    }
+  }
+  
+  @media (max-width: 768px) {
+    .timetable-container .grid > div {
+      @apply min-w-12;
+    }
+  }
 }
 
 /* Custom scrollbar */

@@ -3,12 +3,14 @@ import { Link } from 'react-router-dom';
 import { Calendar, Clock, Users, BookOpen, Trash2, AlertTriangle, CheckCircle, Download, Upload, AlertCircle } from 'lucide-react';
 import { getSchedule, saveSchedule, exportSchedule, importSchedule } from '../utils/localStorage';
 import { validateSchedule } from '../utils/scheduleValidator';
+import CourseSearchBox from '../components/CourseSearchBox';
 
 function SchedulePage() {
   const [schedule, setSchedule] = useState([]);
   const [conflicts, setConflicts] = useState([]);
   const [totalCredits, setTotalCredits] = useState(0);
   const [hoveredSlot, setHoveredSlot] = useState(null);
+  const [selectedConflictSlots, setSelectedConflictSlots] = useState({});
 
   useEffect(() => {
     const savedSchedule = getSchedule() || [];
@@ -63,6 +65,19 @@ function SchedulePage() {
       setTotalCredits(0);
       setConflicts([]);
     }
+  };
+
+  const handleCourseAdded = (course) => {
+    // Refresh schedule data after a course is added or removed
+    const savedSchedule = getSchedule() || [];
+    setSchedule(savedSchedule);
+    
+    // Recalculate units and conflicts
+    const units = savedSchedule.reduce((sum, course) => sum + (parseFloat(course.units) || 0), 0);
+    setTotalCredits(units);
+    
+    const scheduleConflicts = validateSchedule(savedSchedule);
+    setConflicts(scheduleConflicts.conflicts || []);
   };
 
   // Time slots from 9:00 to 21:00
@@ -146,158 +161,202 @@ function SchedulePage() {
     });
   };
 
-  // Process schedule to get course time slots
-  const getCourseTimeSlots = () => {
-    const timeSlots = [];
-    let colorIndex = 0;
+  // Helper function to check if two slots overlap in time
+  const slotsOverlap = (slot1, slot2) => {
+    if (slot1.dayName !== slot2.dayName) return false;
     
-    schedule.forEach(course => {
-      if (!course.terms) return;
+    const start1 = parseTime(slot1.startTime);
+    const end1 = parseTime(slot1.endTime);
+    const start2 = parseTime(slot2.startTime);
+    const end2 = parseTime(slot2.endTime);
+    
+    return (start1 < end2 && start2 < end1);
+  };
+
+  // Helper function to get all conflicting slots for a specific time/day position
+  const getConflictingSlots = (day, timeIndex) => {
+    const slotsAtPosition = courseTimeSlots.filter(slot => 
+      slot.dayName === day && slot.timeSlotPosition === timeIndex
+    );
+    
+    if (slotsAtPosition.length <= 1) return [];
+    
+    // Check for overlapping slots at this position
+    const overlappingSlots = [];
+    
+    for (let i = 0; i < slotsAtPosition.length; i++) {
+      const slot1 = slotsAtPosition[i];
+      let hasOverlap = false;
       
-      // Check if course has selectedSections (new format) or use all sections (old format)
-      const selectedSections = course.selectedSections || [];
-      const hasSelectedSections = selectedSections.length > 0;
-      
-      Object.entries(course.terms).forEach(([termName, sections]) => {
-        Object.entries(sections).forEach(([sectionName, section]) => {
-          // Only include sections that were selected, or all sections if no selection was made
-          if (hasSelectedSections && !selectedSections.includes(sectionName)) {
-            return; // Skip this section if it wasn't selected
+      for (let j = 0; j < slotsAtPosition.length; j++) {
+        if (i !== j) {
+          const slot2 = slotsAtPosition[j];
+          if (slotsOverlap(slot1, slot2)) {
+            hasOverlap = true;
+            break;
           }
-          
-          if (!section.days || !section.startTimes || !section.endTimes) return;
-          
-          section.days.forEach((day, index) => {
-            const startTime = section.startTimes[index];
-            const endTime = section.endTimes[index];
-            const location = section.locations?.[index] || 'TBA';
-            const instructor = section.instructors?.[index] || 'TBA';
-            
-            if (startTime && endTime && day >= 1 && day <= 5) {
-              timeSlots.push({
-                course: course,
-                term: termName,
-                section: sectionName,
-                day: day,
-                startTime: startTime,
-                endTime: endTime,
-                location: location,
-                instructor: instructor,
-                dayName: getDayName(day),
-                timeSlotPosition: getTimeSlotPosition(startTime),
-                duration: getDurationInSlots(startTime, endTime),
-                colorIndex: colorIndex % courseColors.length
+        }
+      }
+      
+      if (hasOverlap) {
+        overlappingSlots.push(slot1);
+      }
+    }
+    
+    return overlappingSlots;
+  };
+
+  // Helper function to get non-conflicting slots for a specific time/day position
+  const getNonConflictingSlots = (day, timeIndex) => {
+    const slotsAtPosition = courseTimeSlots.filter(slot => 
+      slot.dayName === day && slot.timeSlotPosition === timeIndex
+    );
+    
+    return slotsAtPosition.filter(slot => {
+      // Check if this slot overlaps with any other slot at this position
+      for (let i = 0; i < slotsAtPosition.length; i++) {
+        const otherSlot = slotsAtPosition[i];
+        if (slot !== otherSlot && slotsOverlap(slot, otherSlot)) {
+          return false;
+        }
+      }
+      return true;
+    });
+  };
+
+  // Get course time slots for the timetable
+  const courseTimeSlots = (() => {
+    const slots = [];
+    schedule.forEach((course, courseIndex) => {
+      // Handle courses with sections (from course detail view)
+      if (course.sections) {
+        Object.entries(course.sections).forEach(([term, termSections]) => {
+          Object.entries(termSections).forEach(([sectionName, section]) => {
+            if (section.schedule && Array.isArray(section.schedule)) {
+              section.schedule.forEach(scheduleItem => {
+                if (scheduleItem.day && scheduleItem.startTime && scheduleItem.endTime) {
+                  const dayName = getDayName(scheduleItem.day);
+                  const timeSlotPosition = getTimeSlotPosition(scheduleItem.startTime);
+                  const duration = getDurationInSlots(scheduleItem.startTime, scheduleItem.endTime);
+                  
+                  slots.push({
+                    course,
+                    section: sectionName,
+                    dayName,
+                    startTime: scheduleItem.startTime,
+                    endTime: scheduleItem.endTime,
+                    location: scheduleItem.location || 'TBA',
+                    term: term,
+                    timeSlotPosition,
+                    duration,
+                    colorIndex: courseIndex % courseColors.length
+                  });
+                }
               });
-              colorIndex++;
             }
           });
         });
-      });
+      }
+      
+      // Handle courses with direct schedule data (from section selection)
+      if (course.schedule && Array.isArray(course.schedule)) {
+        course.schedule.forEach(scheduleItem => {
+          if (scheduleItem.day && scheduleItem.startTime && scheduleItem.endTime) {
+            const dayName = getDayName(scheduleItem.day);
+            const timeSlotPosition = getTimeSlotPosition(scheduleItem.startTime);
+            const duration = getDurationInSlots(scheduleItem.startTime, scheduleItem.endTime);
+            
+            slots.push({
+              course,
+              section: course.selectedSection || 'Unknown',
+              dayName,
+              startTime: scheduleItem.startTime,
+              endTime: scheduleItem.endTime,
+              location: scheduleItem.location || 'TBA',
+              term: course.selectedTerm || 'Unknown',
+              timeSlotPosition,
+              duration,
+              colorIndex: courseIndex % courseColors.length
+            });
+          }
+        });
+      }
     });
-    
-    return timeSlots;
+    return slots;
+  })();
+
+  // Helper function to get selected conflict index for a specific day/time
+  const getSelectedConflictIndex = (day, timeIndex) => {
+    const key = `${day}-${timeIndex}`;
+    return selectedConflictSlots[key] || 0;
   };
 
-  const courseTimeSlots = getCourseTimeSlots();
+  // Helper function to set selected conflict index for a specific day/time
+  const setSelectedConflictIndex = (day, timeIndex, index) => {
+    const key = `${day}-${timeIndex}`;
+    setSelectedConflictSlots(prev => ({
+      ...prev,
+      [key]: index
+    }));
+  };
+
+  // Helper function to cycle through conflict slots
+  const cycleConflictSlot = (day, timeIndex, direction = 'next') => {
+    const conflictingSlots = getConflictingSlots(day, timeIndex);
+    if (conflictingSlots.length <= 1) return;
+    
+    const currentIndex = getSelectedConflictIndex(day, timeIndex);
+    let newIndex;
+    
+    if (direction === 'next') {
+      newIndex = (currentIndex + 1) % conflictingSlots.length;
+    } else {
+      newIndex = currentIndex === 0 ? conflictingSlots.length - 1 : currentIndex - 1;
+    }
+    
+    setSelectedConflictIndex(day, timeIndex, newIndex);
+  };
 
   return (
-    <div className="max-w-6xl mx-auto p-4">
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">My Schedule</h1>
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <div className="bg-white shadow-sm border-b px-6 py-4">
+        <h1 className="text-2xl font-bold text-gray-900">Schedule Builder</h1>
         <p className="text-gray-600">Manage your course schedule and check for conflicts</p>
       </div>
 
-      {/* Schedule Summary */}
-      <div className="bg-white rounded-lg shadow-sm border p-6 mb-6">
-        <div className="flex justify-between items-center mb-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="flex items-center gap-3">
-              <BookOpen className="h-6 w-6 text-blue-600" />
-              <div>
-                <div className="text-sm text-gray-500">Total Courses</div>
-                <div className="text-2xl font-bold text-gray-900">{schedule.length}</div>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <Clock className="h-6 w-6 text-green-600" />
-              <div>
-                <div className="text-sm text-gray-500">Total Units</div>
-                <div className="text-2xl font-bold text-gray-900">{totalCredits}</div>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <AlertTriangle className="h-6 w-6 text-red-600" />
-              <div>
-                <div className="text-sm text-gray-500">Conflicts</div>
-                <div className="text-2xl font-bold text-gray-900">{conflicts.length}</div>
-              </div>
-            </div>
+      {/* Main Layout - Three Column Layout */}
+      <div className="h-[calc(100vh-120px)] flex flex-col lg:flex-row gap-4 p-4">
+        {/* Left Section - Course Search */}
+        <div className="lg:w-[400px] lg:flex-shrink-0 bg-white rounded-lg shadow-sm border overflow-hidden flex flex-col">
+          <div className="p-4 border-b border-gray-200">
+            <h2 className="text-lg font-semibold text-gray-900">Search Courses</h2>
           </div>
-          <div className="flex gap-2">
-            <button
-              onClick={handleExport}
-              className="flex items-center gap-2 px-4 py-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition-colors"
-            >
-              <Download className="h-4 w-4" />
-              Export
-            </button>
-            <label className="flex items-center gap-2 px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors cursor-pointer">
-              <Upload className="h-4 w-4" />
-              Import
-              <input
-                type="file"
-                accept=".json"
-                onChange={handleImport}
-                className="hidden"
-              />
-            </label>
-            {schedule.length > 0 && (
-              <button
-                onClick={clearSchedule}
-                className="flex items-center gap-2 px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors"
-              >
-                <Trash2 className="h-4 w-4" />
-                Clear All
-              </button>
-            )}
+          <div className="flex-1 overflow-y-auto">
+            <CourseSearchBox onCourseSelect={handleCourseAdded} compact={true} />
           </div>
         </div>
 
-
-      </div>
-
-      {/* Timetable */}
-      {schedule.length === 0 ? (
-        <div className="bg-white rounded-lg shadow-sm border p-12 text-center">
-          <Calendar className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No courses in your schedule</h3>
-          <p className="text-gray-600 mb-6">Start building your schedule by searching for courses</p>
-          <Link
-            to="/search"
-            className="inline-flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors"
-          >
-            <BookOpen className="h-4 w-4" />
-            Search Courses
-          </Link>
-        </div>
-      ) : (
-        <div className="space-y-6">
-          {/* Timetable Header */}
-          <div className="flex justify-between items-center">
-            <h2 className="text-xl font-semibold text-gray-900">
-              Weekly Schedule
-            </h2>
-            <div className="text-sm text-gray-600">
-              Total Units: <span className="font-semibold">{totalCredits}</span>
+        {/* Middle Section - Timetable */}
+        <div className="flex-1 bg-white rounded-lg shadow-sm border overflow-hidden flex flex-col min-w-0 max-w-2xl mx-auto">
+          <div className="p-4 border-b border-gray-200">
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
+              <h2 className="text-lg font-semibold text-gray-900">Weekly Schedule</h2>
+              <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-sm text-gray-600">
+                <span>Units: <span className="font-semibold">{totalCredits}</span></span>
+                <span>Courses: <span className="font-semibold">{schedule.length}</span></span>
+                <span>Conflicts: <span className="font-semibold text-red-600">{conflicts.length}</span></span>
+              </div>
             </div>
           </div>
           
-          {/* Timetable Container */}
-          <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
-            <div className="timetable-container">
+          {/* Timetable Content */}
+          <div className="flex-1 overflow-auto">
+            {schedule.length > 0 ? (
+              <div className="timetable-container h-full">
               {/* Day Headers */}
-              <div className="grid grid-cols-6 border-b border-gray-200">
-                <div className="p-4 bg-gray-50"></div> {/* Empty corner */}
+                <div className="grid grid-cols-6 border-b border-gray-200 sticky top-0 bg-white z-10">
+                <div className="p-2 bg-gray-50"></div> {/* Empty corner */}
                 {days.map((day, index) => {
                   const daySlots = courseTimeSlots.filter(slot => slot.dayName === day);
                   const totalHours = daySlots.reduce((sum, slot) => {
@@ -307,11 +366,11 @@ function SchedulePage() {
                   }, 0);
                   
                   return (
-                    <div key={day} className="p-4 bg-gray-50 border-l border-gray-200">
+                    <div key={day} className="p-2 bg-gray-50 border-l border-gray-200">
                       <div className="text-center">
-                        <span className="font-semibold text-gray-900 text-sm">{day}</span>
-                        <div className="text-xs text-gray-500 mt-1">
-                          ({totalHours.toFixed(1)} hrs)
+                        <span className="font-semibold text-gray-900 text-xs">{day}</span>
+                        <div className="text-xs text-gray-500">
+                          ({totalHours.toFixed(1)}h)
                         </div>
                       </div>
                     </div>
@@ -319,12 +378,12 @@ function SchedulePage() {
                 })}
               </div>
               
-              {/* Time Grid */}
+                {/* Time Grid */}
               <div className="grid grid-cols-6">
                 {/* Time Labels */}
                 <div className="border-r border-gray-200">
                   {timeSlots.map((time, index) => (
-                    <div key={time} className="h-16 border-b border-gray-100 flex items-center justify-center text-sm text-gray-600 bg-gray-50">
+                    <div key={time} className="h-12 border-b border-gray-100 flex items-center justify-center text-xs text-gray-600 bg-gray-50">
                       {time}
                     </div>
                   ))}
@@ -333,34 +392,35 @@ function SchedulePage() {
                 {/* Day Columns */}
                 {days.map((day, dayIndex) => (
                   <div key={day} className="relative border-r border-gray-200 last:border-r-0">
-                    {timeSlots.map((time, timeIndex) => (
-                      <div key={time} className="h-16 border-b border-gray-100 relative">
-                        {/* Simple border for visual separation */}
-                        <div className="absolute inset-0 border border-gray-100 opacity-50"></div>
-                        
-                        {/* Course slots */}
-                        {courseTimeSlots
-                          .filter(slot => slot.dayName === day && slot.timeSlotPosition === timeIndex)
-                          .map((slot, slotIndex) => {
+                    {timeSlots.map((time, timeIndex) => {
+                      const conflictingSlots = getConflictingSlots(day, timeIndex);
+                      const nonConflictingSlots = getNonConflictingSlots(day, timeIndex);
+                      
+                      return (
+                        <div key={time} className="h-12 border-b border-gray-100 relative">
+                          {/* Simple border for visual separation */}
+                          <div className="absolute inset-0 border border-gray-100 opacity-50"></div>
+                          
+                          {/* Non-conflicting slots */}
+                          {nonConflictingSlots.map((slot, slotIndex) => {
                             const uniqueKey = `${slot.course.subject}-${slot.course.code}-${slot.section}-${slot.day}-${slot.startTime}-${slotIndex}`;
                             const isHovered = hoveredSlot === uniqueKey;
                             const colorClass = courseColors[slot.colorIndex];
                             const [bgColor, borderColor, textColor, hoverBgColor] = colorClass.split(' ');
-                            const slotHasConflict = hasConflict(slot);
                             
                             return (
                               <div
                                 key={uniqueKey}
                                 className={`absolute inset-1 ${isHovered ? hoverBgColor : bgColor} ${borderColor} rounded cursor-pointer transition-all duration-300 ease-in-out transform ${
                                   isHovered ? 'shadow-xl scale-110 z-50' : 'hover:shadow-lg hover:scale-105 z-10'
-                                } ${slotHasConflict ? 'border-2 border-red-500' : ''}`}
+                                }`}
                                 style={{
-                                  height: isHovered ? 'auto' : `${Math.max(64, slot.duration * 64)}px`,
-                                  minHeight: isHovered ? '120px' : `${Math.max(64, slot.duration * 64)}px`,
+                                  height: isHovered ? 'auto' : `${Math.max(48, slot.duration * 48)}px`,
+                                  minHeight: isHovered ? '120px' : `${Math.max(48, slot.duration * 48)}px`,
                                   width: 'calc(100% - 8px)',
                                   maxWidth: 'calc(100% - 8px)',
                                   whiteSpace: isHovered ? 'normal' : 'nowrap',
-                                  padding: isHovered ? '10px 8px' : '8px',
+                                  padding: isHovered ? '10px 8px' : '6px',
                                   display: 'block',
                                   wordWrap: isHovered ? 'break-word' : 'normal',
                                   overflowWrap: isHovered ? 'break-word' : 'normal',
@@ -371,13 +431,6 @@ function SchedulePage() {
                                 onMouseEnter={() => setHoveredSlot(uniqueKey)}
                                 onMouseLeave={() => setHoveredSlot(null)}
                               >
-                                {/* Conflict indicator */}
-                                {slotHasConflict && !isHovered && (
-                                  <div className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center">
-                                    <AlertCircle className="w-3 h-3" />
-                                  </div>
-                                )}
-                                
                                 {isHovered ? (
                                   // Expanded view on hover
                                   <div className="break-words h-full flex flex-col justify-start space-y-1">
@@ -398,12 +451,6 @@ function SchedulePage() {
                                     <div className={`${textColor.replace('800', '600')} text-xs leading-tight break-words`}>
                                       {slot.term}
                                     </div>
-                                    {slotHasConflict && (
-                                      <div className="text-red-600 text-xs font-medium flex items-center gap-1 mt-auto">
-                                        <AlertCircle className="w-3 h-3" />
-                                        Conflict
-                                      </div>
-                                    )}
                                   </div>
                                 ) : (
                                   // Compact view when not hovering
@@ -422,46 +469,244 @@ function SchedulePage() {
                               </div>
                             );
                           })}
-                      </div>
-                    ))}
+                          
+                          {/* Conflicting slots - Carousel Stack Style */}
+                          {conflictingSlots.length > 0 && (
+                            <div className="absolute inset-1 group">
+                              {/* Navigation controls - only show on hover */}
+                              {conflictingSlots.length > 1 && (
+                                <div className="absolute -top-8 left-0 right-0 flex justify-center gap-1 z-50 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      cycleConflictSlot(day, timeIndex, 'prev');
+                                    }}
+                                    className="w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-xs font-bold hover:bg-red-600 transition-colors shadow-md"
+                                    title="Previous conflict"
+                                  >
+                                    ‹
+                                  </button>
+                                  <div className="px-2 py-0.5 bg-red-500 text-white rounded text-xs font-bold shadow-md">
+                                    {getSelectedConflictIndex(day, timeIndex) + 1}/{conflictingSlots.length}
+                                  </div>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      cycleConflictSlot(day, timeIndex, 'next');
+                                    }}
+                                    className="w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-xs font-bold hover:bg-red-600 transition-colors shadow-md"
+                                    title="Next conflict"
+                                  >
+                                    ›
+                                  </button>
+                                </div>
+                              )}
+                              
+                              {conflictingSlots.map((slot, stackIndex) => {
+                                const uniqueKey = `conflict-${slot.course.subject}-${slot.course.code}-${slot.section}-${slot.day}-${slot.startTime}-${stackIndex}`;
+                                const isHovered = hoveredSlot === uniqueKey;
+                                const colorClass = courseColors[slot.colorIndex];
+                                const [bgColor, borderColor, textColor, hoverBgColor] = colorClass.split(' ');
+                                const selectedIndex = getSelectedConflictIndex(day, timeIndex);
+                                const isSelected = stackIndex === selectedIndex;
+                                
+                                // Enhanced stack positioning with better visual separation
+                                const baseZIndex = 20;
+                                const stackOffset = stackIndex * 3; // Increased offset for better separation
+                                let zIndex, transform, opacity, pointerEvents;
+                                
+                                if (isSelected) {
+                                  // Selected slot is fully visible and interactive
+                                  zIndex = baseZIndex + conflictingSlots.length + 10;
+                                  transform = isHovered 
+                                    ? 'scale(1.3) translateY(-10px) translateX(-6px)' 
+                                    : 'scale(1)';
+                                  opacity = 1;
+                                  pointerEvents = 'auto';
+                                } else {
+                                  // Non-selected slots are more hidden but still accessible via navigation
+                                  zIndex = baseZIndex + stackIndex;
+                                  transform = `scale(${0.7 - stackIndex * 0.15})`;
+                                  opacity = 0.2;
+                                  pointerEvents = 'none';
+                                }
+                                
+                                return (
+                                  <div
+                                    key={uniqueKey}
+                                    className={`absolute ${isHovered ? hoverBgColor : bgColor} ${borderColor} rounded cursor-pointer transition-all duration-300 ease-in-out transform ${
+                                      isHovered ? 'shadow-2xl scale-125 z-50' : 'hover:shadow-lg hover:scale-105'
+                                    }`}
+                                    style={{
+                                      height: isHovered ? 'auto' : `${Math.max(48, slot.duration * 48)}px`,
+                                      minHeight: isHovered ? '160px' : `${Math.max(48, slot.duration * 48)}px`,
+                                      width: 'calc(100% - 8px)',
+                                      maxWidth: 'calc(100% - 8px)',
+                                      whiteSpace: isHovered ? 'normal' : 'nowrap',
+                                      padding: isHovered ? '14px 12px' : '6px',
+                                      display: 'block',
+                                      wordWrap: isHovered ? 'break-word' : 'normal',
+                                      overflowWrap: isHovered ? 'break-word' : 'normal',
+                                      zIndex: zIndex,
+                                      left: `${stackOffset}px`,
+                                      top: `${stackOffset}px`,
+                                      width: `calc(100% - ${stackOffset + 8}px)`,
+                                      transform: transform,
+                                      opacity: opacity,
+                                      pointerEvents: pointerEvents,
+                                      boxShadow: isHovered 
+                                        ? '0 30px 60px -12px rgba(0, 0, 0, 0.3)' 
+                                        : `0 ${6 + stackIndex * 3}px ${8 + stackIndex * 3}px -1px rgba(0, 0, 0, 0.15), 0 2px 4px -1px rgba(0, 0, 0, 0.08)`,
+                                      overflow: 'hidden'
+                                    }}
+                                    onMouseEnter={() => setHoveredSlot(uniqueKey)}
+                                    onMouseLeave={() => setHoveredSlot(null)}
+                                  >
+                                    {/* Conflict indicator */}
+                                    <div className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center shadow-md">
+                                      <AlertCircle className="w-2 h-2" />
+                                    </div>
+                                    
+                                    {isHovered ? (
+                                      // Enhanced expanded view on hover
+                                      <div className="break-words h-full flex flex-col justify-start space-y-2">
+                                        <div className={`font-bold ${textColor} text-sm leading-tight break-words`}>
+                                          {slot.course.subject}{slot.course.code}
+                                        </div>
+                                        <div className={`${textColor.replace('800', '600')} text-xs leading-tight break-words`}>
+                                          {slot.startTime}-{slot.endTime}
+                                        </div>
+                                        <div className={`${textColor.replace('800', '600')} text-xs leading-tight break-words`}>
+                                          {slot.section}
+                                        </div>
+                                        {slot.location !== 'TBA' && (
+                                          <div className={`${textColor.replace('800', '600')} text-xs leading-tight break-words`}>
+                                            {slot.location}
+                                          </div>
+                                        )}
+                                        <div className={`${textColor.replace('800', '600')} text-xs leading-tight break-words`}>
+                                          {slot.term}
+                                        </div>
+                                        <div className="text-red-600 text-xs font-bold flex items-center gap-1 mt-auto bg-red-50 px-2 py-1 rounded">
+                                          <AlertCircle className="w-3 h-3" />
+                                          Conflict #{stackIndex + 1} of {conflictingSlots.length}
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      // Enhanced compact view when not hovering
+                                      <div className="h-full flex flex-col justify-center">
+                                        <div className={`font-bold ${textColor} text-xs leading-tight truncate`}>
+                                          {slot.course.subject}{slot.course.code}
+                                        </div>
+                                        <div className={`${textColor.replace('800', '600')} text-xs leading-tight truncate`}>
+                                          {slot.startTime}-{slot.endTime}
+                                        </div>
+                                        <div className={`${textColor.replace('800', '600')} text-xs leading-tight truncate`}>
+                                          {slot.section} {slot.location !== 'TBA' ? `• ${slot.location}` : ''}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 ))}
               </div>
             </div>
-          </div>
-          
-          {/* Course List (Compact) */}
-          <div className="bg-white rounded-lg shadow-sm border p-4">
-            <h3 className="text-lg font-medium text-gray-900 mb-3">Course List</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {schedule.map(course => (
-                <div key={`${course.subject}-${course.code}`} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                  <div className="flex-1">
-                    <Link
-                      to={`/course/${course.subject}/${course.code}`}
-                      className="font-medium text-blue-600 hover:text-blue-800 hover:underline"
-                    >
-                      {course.subject}{course.code}
-                    </Link>
-                    <div className="text-sm text-gray-600">
-                      {course.title}
-                      <br />
-                      <span className="text-gray-500">{course.units} units</span>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => removeCourse(course.subject, course.code)}
-                    className="ml-2 p-1 text-red-600 hover:bg-red-50 rounded transition-colors"
-                    title="Remove from schedule"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
-              ))}
-            </div>
+            ) : (
+              // Empty state
+              <div className="flex items-center justify-center h-full text-center">
+                <div>
+                  <Calendar className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">No courses in your schedule</h3>
+                  <p className="text-gray-600">Start building your schedule by searching for courses</p>
           </div>
         </div>
       )}
+          </div>
+        </div>
+
+        {/* Right Section - Course List */}
+        <div className="lg:w-80 lg:flex-shrink-0 bg-white rounded-lg shadow-sm border overflow-hidden flex flex-col">
+          <div className="p-4 border-b border-gray-200">
+            <div className="flex justify-between items-center">
+              <h2 className="text-lg font-semibold text-gray-900">Selected Courses</h2>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleExport}
+                  className="p-2 text-green-600 hover:bg-green-50 rounded transition-colors"
+                  title="Export Schedule"
+                >
+                  <Download className="h-4 w-4" />
+                </button>
+                <label className="p-2 text-blue-600 hover:bg-blue-50 rounded transition-colors cursor-pointer" title="Import Schedule">
+                  <Upload className="h-4 w-4" />
+                  <input
+                    type="file"
+                    accept=".json"
+                    onChange={handleImport}
+                    className="hidden"
+                  />
+                </label>
+                {schedule.length > 0 && (
+                  <button
+                    onClick={clearSchedule}
+                    className="p-2 text-red-600 hover:bg-red-50 rounded transition-colors"
+                    title="Clear All"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Course List Content */}
+          <div className="flex-1 overflow-y-auto">
+            {schedule.length > 0 ? (
+              <div className="p-4 space-y-3">
+                {schedule.map(course => (
+                  <div key={`${course.subject}-${course.code}`} className="p-3 bg-gray-50 rounded-lg border">
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1 min-w-0">
+                      <Link
+                        to={`/course/${course.subject}/${course.code}`}
+                          className="font-medium text-blue-600 hover:text-blue-800 hover:underline text-sm block truncate"
+                      >
+                        {course.subject}{course.code}
+                      </Link>
+                        <div className="text-xs text-gray-600 mt-1">
+                          <div className="truncate">{course.title}</div>
+                          <div className="text-gray-500">{course.units} units</div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => removeCourse(course.subject, course.code)}
+                        className="ml-2 p-1 text-red-600 hover:bg-red-50 rounded transition-colors flex-shrink-0"
+                      title="Remove from schedule"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="flex items-center justify-center h-full text-center p-4">
+                <div>
+                  <BookOpen className="h-12 w-12 text-gray-400 mx-auto mb-3" />
+                  <p className="text-gray-600 text-sm">No courses selected</p>
+              </div>
+            </div>
+          )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
