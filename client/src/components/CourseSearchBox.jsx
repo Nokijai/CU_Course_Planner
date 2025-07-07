@@ -419,12 +419,7 @@ function CourseSearchBox({ onCourseSelect, compact = false }) {
             </button>
           </div>
         
-        {/* Search hint */}
-        {!query && !showFilters && (
-          <div className="mt-2 text-xs text-gray-500">
-            💡 Tip: Type to search by course code prefix (e.g., "C" → "CS" → "CS1" → "CS101")
-          </div>
-        )}
+
         
         {/* Search progress indicator */}
         {query && query.length === 1 && (

@@ -8,6 +8,8 @@ import CourseSearchPage from './pages/CourseSearchPage';
 import CourseDetailPage from './pages/CourseDetailPage';
 import SchedulePage from './pages/SchedulePage';
 import FavoritesPage from './pages/FavoritesPage';
+import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
+import TermsOfServicePage from './pages/TermsOfServicePage';
 import NotFoundPage from './pages/NotFoundPage';
 
 function App() {
@@ -21,6 +23,8 @@ function App() {
           <Route path="/course/:subject/:code" element={<CourseDetailPage />} />
           <Route path="/schedule" element={<SchedulePage />} />
           <Route path="/favorites" element={<FavoritesPage />} />
+          <Route path="/privacy" element={<PrivacyPolicyPage />} />
+          <Route path="/terms" element={<TermsOfServicePage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </main>

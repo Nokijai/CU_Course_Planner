@@ -19,7 +19,7 @@ const Footer = () => {
             </p>
             <div className="flex space-x-4">
               <a
-                href="https://github.com/cuhk-course-planner"
+                href="https://github.com/Nokijai/CU_Course_Planner"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-gray-300 hover:text-white transition-colors"
@@ -73,7 +73,7 @@ const Footer = () => {
               </li>
               <li>
                 <a
-                  href="https://www.cuhk.edu.hk/english/academics/programme-offered.html"
+                  href="https://admission.cuhk.edu.hk/programmes/list/"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-gray-300 hover:text-white transition-colors flex items-center space-x-1"
@@ -84,7 +84,7 @@ const Footer = () => {
               </li>
               <li>
                 <a
-                  href="https://www.cuhk.edu.hk/english/academics/undergraduate-studies.html"
+                  href="https://admission.cuhk.edu.hk/"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-gray-300 hover:text-white transition-colors flex items-center space-x-1"
@@ -95,7 +95,7 @@ const Footer = () => {
               </li>
               <li>
                 <a
-                  href="https://www.cuhk.edu.hk/english/academics/graduate-studies.html"
+                  href="https://www.gs.cuhk.edu.hk/"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-gray-300 hover:text-white transition-colors flex items-center space-x-1"

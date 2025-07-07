@@ -405,7 +405,6 @@ function SchedulePage() {
               <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-sm text-gray-600">
                 <span>Units: <span className="font-semibold">{totalCredits}</span></span>
                 <span>Courses: <span className="font-semibold">{visibleCourses.size}/{schedule.length}</span></span>
-                <span>Conflicts: <span className="font-semibold text-red-600">{conflicts.length}</span></span>
               </div>
             </div>
           </div>
