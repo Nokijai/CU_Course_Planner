@@ -4,6 +4,7 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 const mongoose = require('mongoose');
 const config = require('./config/env');
+const mongoConfig = require('./config/mongodb-atlas');
 const courseRoutes = require('./routes/courseRoutes');
 const authRoutes = require('./routes/authRoutes');
 const { errorHandler, notFound } = require('./middleware/errorMiddleware');
@@ -75,15 +76,17 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Connect to MongoDB
-mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/cuhk-course-planner', {
-  serverSelectionTimeoutMS: 5000, // Timeout after 5s instead of 30s
-  socketTimeoutMS: 45000, // Close sockets after 45s of inactivity
-  bufferCommands: false, // Disable mongoose buffering
+// Connect to MongoDB Atlas
+mongoose.connect(mongoConfig.mongoUri, mongoConfig.connectionOptions)
+.then(() => {
+  console.log('✅ Connected to MongoDB Atlas');
+  console.log(`📊 Database: ${mongoConfig.databaseName}`);
+  console.log(`🌐 Environment: ${config.nodeEnv}`);
 })
-.then(() => console.log('✅ Connected to MongoDB'))
 .catch(err => {
-  console.error('❌ MongoDB connection error:', err);
+  console.error('❌ MongoDB Atlas connection error:', err);
+  console.error('💡 Make sure your MONGODB_URI environment variable is set correctly');
+  console.error('💡 Format: mongodb+srv://<username>:<password>@<cluster>.mongodb.net/<database>?retryWrites=true&w=majority');
   process.exit(1);
 });
 

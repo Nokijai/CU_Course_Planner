@@ -1,15 +1,188 @@
 const STORAGE_KEYS = {
   SCHEDULE: 'cuhk_schedule',
+  TIMETABLES: 'cuhk_timetables',
+  CURRENT_TIMETABLE: 'cuhk_current_timetable',
   FAVORITES: 'cuhk_favorites',
   SETTINGS: 'cuhk_settings',
   SEARCH_HISTORY: 'cuhk_search_history'
 };
 
-// Schedule management
+// Timetable management
+export const saveTimetables = (timetables) => {
+  try {
+    localStorage.setItem(STORAGE_KEYS.TIMETABLES, JSON.stringify(timetables));
+    return true;
+  } catch (error) {
+    console.error('Error saving timetables:', error);
+    return false;
+  }
+};
+
+export const loadTimetables = () => {
+  try {
+    const timetables = localStorage.getItem(STORAGE_KEYS.TIMETABLES);
+    return timetables ? JSON.parse(timetables) : [];
+  } catch (error) {
+    console.error('Error loading timetables:', error);
+    return [];
+  }
+};
+
+export const getCurrentTimetableId = () => {
+  try {
+    return localStorage.getItem(STORAGE_KEYS.CURRENT_TIMETABLE) || 'default';
+  } catch (error) {
+    console.error('Error getting current timetable ID:', error);
+    return 'default';
+  }
+};
+
+export const setCurrentTimetableId = (id) => {
+  try {
+    localStorage.setItem(STORAGE_KEYS.CURRENT_TIMETABLE, id);
+    return true;
+  } catch (error) {
+    console.error('Error setting current timetable ID:', error);
+    return false;
+  }
+};
+
+export const createTimetable = (name) => {
+  try {
+    const timetables = loadTimetables();
+    const newId = `timetable_${Date.now()}`;
+    const newTimetable = {
+      id: newId,
+      name: name,
+      courses: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    
+    timetables.push(newTimetable);
+    saveTimetables(timetables);
+    setCurrentTimetableId(newId);
+    return newId;
+  } catch (error) {
+    console.error('Error creating timetable:', error);
+    return null;
+  }
+};
+
+export const renameTimetable = (id, newName) => {
+  try {
+    const timetables = loadTimetables();
+    const timetableIndex = timetables.findIndex(t => t.id === id);
+    
+    if (timetableIndex !== -1) {
+      timetables[timetableIndex].name = newName;
+      timetables[timetableIndex].updatedAt = new Date().toISOString();
+      saveTimetables(timetables);
+      return true;
+    }
+    return false;
+  } catch (error) {
+    console.error('Error renaming timetable:', error);
+    return false;
+  }
+};
+
+export const deleteTimetable = (id) => {
+  try {
+    const timetables = loadTimetables();
+    const filteredTimetables = timetables.filter(t => t.id !== id);
+    
+    if (filteredTimetables.length === 0) {
+      // If no timetables left, create a default one
+      const defaultTimetable = {
+        id: 'default',
+        name: 'Default Timetable',
+        courses: [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      filteredTimetables.push(defaultTimetable);
+      setCurrentTimetableId('default');
+    } else if (getCurrentTimetableId() === id) {
+      // If deleting current timetable, switch to the first available one
+      setCurrentTimetableId(filteredTimetables[0].id);
+    }
+    
+    saveTimetables(filteredTimetables);
+    return true;
+  } catch (error) {
+    console.error('Error deleting timetable:', error);
+    return false;
+  }
+};
+
+export const getCurrentTimetable = () => {
+  try {
+    const timetables = loadTimetables();
+    const currentId = getCurrentTimetableId();
+    
+    // If no timetables exist, create a default one
+    if (timetables.length === 0) {
+      const defaultTimetable = {
+        id: 'default',
+        name: 'Default Timetable',
+        courses: [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      timetables.push(defaultTimetable);
+      saveTimetables(timetables);
+      return defaultTimetable;
+    }
+    
+    // Find current timetable
+    let currentTimetable = timetables.find(t => t.id === currentId);
+    
+    // If current timetable doesn't exist, use the first one
+    if (!currentTimetable) {
+      currentTimetable = timetables[0];
+      setCurrentTimetableId(currentTimetable.id);
+    }
+    
+    return currentTimetable;
+  } catch (error) {
+    console.error('Error getting current timetable:', error);
+    return {
+      id: 'default',
+      name: 'Default Timetable',
+      courses: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+  }
+};
+
+export const saveCurrentTimetable = (courses) => {
+  try {
+    const timetables = loadTimetables();
+    const currentId = getCurrentTimetableId();
+    const timetableIndex = timetables.findIndex(t => t.id === currentId);
+    
+    if (timetableIndex !== -1) {
+      timetables[timetableIndex].courses = courses;
+      timetables[timetableIndex].updatedAt = new Date().toISOString();
+      saveTimetables(timetables);
+      return true;
+    }
+    return false;
+  } catch (error) {
+    console.error('Error saving current timetable:', error);
+    return false;
+  }
+};
+
+// Schedule management (now uses current timetable)
 export const saveSchedule = (schedule) => {
   try {
+    // For backward compatibility, also save to old storage key
     localStorage.setItem(STORAGE_KEYS.SCHEDULE, JSON.stringify(schedule));
-    return true;
+    // Save to current timetable
+    return saveCurrentTimetable(schedule);
   } catch (error) {
     console.error('Error saving schedule:', error);
     return false;
@@ -18,8 +191,8 @@ export const saveSchedule = (schedule) => {
 
 export const loadSchedule = () => {
   try {
-    const schedule = localStorage.getItem(STORAGE_KEYS.SCHEDULE);
-    return schedule ? JSON.parse(schedule) : [];
+    const currentTimetable = getCurrentTimetable();
+    return currentTimetable.courses || [];
   } catch (error) {
     console.error('Error loading schedule:', error);
     return [];
@@ -212,13 +385,23 @@ export const clearSearchHistory = () => {
 export const exportSchedule = () => {
   try {
     const schedule = loadSchedule();
-    const dataStr = JSON.stringify(schedule, null, 2);
+    const currentTimetable = getCurrentTimetable();
+    const exportData = {
+      timetable: {
+        name: currentTimetable.name,
+        id: currentTimetable.id,
+        exportedAt: new Date().toISOString()
+      },
+      schedule: schedule
+    };
+    
+    const dataStr = JSON.stringify(exportData, null, 2);
     const dataBlob = new Blob([dataStr], { type: 'application/json' });
     const url = URL.createObjectURL(dataBlob);
     
     const link = document.createElement('a');
     link.href = url;
-    link.download = `cuhk-schedule-${new Date().toISOString().split('T')[0]}.json`;
+    link.download = `cuhk-schedule-${currentTimetable.name.replace(/[^a-zA-Z0-9]/g, '-')}-${new Date().toISOString().split('T')[0]}.json`;
     link.click();
     
     URL.revokeObjectURL(url);
@@ -235,13 +418,21 @@ export const importSchedule = (file) => {
     
     reader.onload = (e) => {
       try {
-        const schedule = JSON.parse(e.target.result);
-        if (Array.isArray(schedule)) {
-          saveSchedule(schedule);
-          resolve(true);
+        const data = JSON.parse(e.target.result);
+        let schedule;
+        
+        // Handle both old format (array) and new format (object with timetable info)
+        if (Array.isArray(data)) {
+          schedule = data;
+        } else if (data.schedule && Array.isArray(data.schedule)) {
+          schedule = data.schedule;
         } else {
           reject(new Error('Invalid schedule format'));
+          return;
         }
+        
+        saveSchedule(schedule);
+        resolve(true);
       } catch (error) {
         reject(error);
       }

@@ -1,13 +1,15 @@
 import React, { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Search, Menu, X, BookOpen, Calendar, Heart, Home } from 'lucide-react';
+import { Search, Menu, X, BookOpen, Calendar, Heart, Home, LogOut, User } from 'lucide-react';
 import { cn } from '../utils/cn';
+import { useAuth } from '../contexts/AuthContext';
 
 const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const navigate = useNavigate();
   const location = useLocation();
+  const { isAuthenticated, logout, user } = useAuth();
 
   const handleSearch = (e) => {
     e.preventDefault();
@@ -72,6 +74,33 @@ const Header = () => {
             </form>
           </div>
 
+          {/* User Menu */}
+          <div className="hidden md:flex items-center space-x-4">
+            {isAuthenticated ? (
+              <div className="flex items-center space-x-3">
+                <div className="flex items-center space-x-2 text-sm text-gray-700">
+                  <User className="h-4 w-4" />
+                  <span>{user?.email}</span>
+                </div>
+                <button
+                  onClick={logout}
+                  className="flex items-center space-x-1 px-3 py-2 text-sm font-medium text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
+                >
+                  <LogOut className="h-4 w-4" />
+                  <span>Logout</span>
+                </button>
+              </div>
+            ) : (
+              <Link
+                to="/login"
+                className="flex items-center space-x-1 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors"
+              >
+                <User className="h-4 w-4" />
+                <span>Login</span>
+              </Link>
+            )}
+          </div>
+
           {/* Mobile menu button */}
           <button
             onClick={() => setIsMenuOpen(!isMenuOpen)}
@@ -118,6 +147,37 @@ const Header = () => {
                   </Link>
                 );
               })}
+
+              {/* Mobile User Menu */}
+              {isAuthenticated ? (
+                <div className="border-t border-gray-200 pt-4 mt-4">
+                  <div className="flex items-center space-x-2 px-3 py-2 text-sm text-gray-700 mb-2">
+                    <User className="h-4 w-4" />
+                    <span>{user?.email}</span>
+                  </div>
+                  <button
+                    onClick={() => {
+                      logout();
+                      setIsMenuOpen(false);
+                    }}
+                    className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors w-full"
+                  >
+                    <LogOut className="h-4 w-4" />
+                    <span>Logout</span>
+                  </button>
+                </div>
+              ) : (
+                <div className="border-t border-gray-200 pt-4 mt-4">
+                  <Link
+                    to="/login"
+                    onClick={() => setIsMenuOpen(false)}
+                    className="flex items-center space-x-2 px-3 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors"
+                  >
+                    <User className="h-4 w-4" />
+                    <span>Login</span>
+                  </Link>
+                </div>
+              )}
             </div>
           </div>
         )}

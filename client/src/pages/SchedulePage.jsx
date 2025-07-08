@@ -4,6 +4,7 @@ import { Calendar, Clock, Users, BookOpen, Trash2, AlertTriangle, CheckCircle, D
 import { getSchedule, saveSchedule, exportSchedule, importSchedule } from '../utils/localStorage';
 import { validateSchedule } from '../utils/scheduleValidator';
 import CourseSearchBox from '../components/CourseSearchBox';
+import TimetableToolbar from '../components/TimetableToolbar';
 
 function SchedulePage() {
   const [schedule, setSchedule] = useState([]);
@@ -12,8 +13,13 @@ function SchedulePage() {
   const [hoveredSlot, setHoveredSlot] = useState(null);
   const [selectedConflictSlots, setSelectedConflictSlots] = useState({});
   const [visibleCourses, setVisibleCourses] = useState(new Set()); // Track which courses are visible in timetable
+  const [currentTimetableId, setCurrentTimetableId] = useState(''); // Track current timetable
 
   useEffect(() => {
+    loadCurrentTimetable();
+  }, [currentTimetableId]);
+
+  const loadCurrentTimetable = () => {
     const savedSchedule = getSchedule() || [];
     setSchedule(savedSchedule);
     
@@ -30,7 +36,11 @@ function SchedulePage() {
     // Check for conflicts
     const scheduleConflicts = validateSchedule(savedSchedule);
     setConflicts(scheduleConflicts.conflicts || []);
-  }, []);
+  };
+
+  const handleTimetableChange = (newTimetableId) => {
+    setCurrentTimetableId(newTimetableId);
+  };
 
   const removeCourse = (subject, code) => {
     const updated = schedule.filter(c => c.subject !== subject || c.code !== code);
@@ -59,21 +69,12 @@ function SchedulePage() {
   const handleImport = (event) => {
     const file = event.target.files[0];
     if (file) {
-      importSchedule(file, (importedSchedule) => {
-        setSchedule(importedSchedule);
-        saveSchedule(importedSchedule);
-        
-        // Set all imported courses as visible
-        const importedVisibleCourses = new Set(
-          importedSchedule.map(course => `${course.subject}-${course.code}`)
-        );
-        setVisibleCourses(importedVisibleCourses);
-        
-        const units = importedSchedule.reduce((sum, course) => sum + (parseFloat(course.units) || 0), 0);
-        setTotalCredits(units);
-        
-        const scheduleConflicts = validateSchedule(importedSchedule);
-        setConflicts(scheduleConflicts.conflicts || []);
+      importSchedule(file).then(() => {
+        // Reload the current timetable after import
+        loadCurrentTimetable();
+      }).catch((error) => {
+        console.error('Error importing schedule:', error);
+        alert('Error importing schedule. Please check the file format.');
       });
     }
   };
@@ -385,8 +386,11 @@ function SchedulePage() {
         <p className="text-gray-600">Manage your course schedule and check for conflicts</p>
       </div>
 
+      {/* Timetable Toolbar */}
+      <TimetableToolbar onTimetableChange={handleTimetableChange} />
+
       {/* Main Layout - Three Column Layout */}
-      <div className="h-[calc(100vh-120px)] flex flex-col lg:flex-row gap-4 p-4">
+      <div className="h-[calc(100vh-180px)] flex flex-col lg:flex-row gap-4 p-4">
         {/* Left Section - Course Search */}
         <div className="lg:w-[400px] lg:flex-shrink-0 bg-white rounded-lg shadow-sm border overflow-hidden flex flex-col">
           <div className="p-4 border-b border-gray-200">
