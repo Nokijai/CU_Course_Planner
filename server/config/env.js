@@ -16,6 +16,16 @@ const config = {
   ],
   // Cache settings
   cacheDuration: process.env.CACHE_DURATION || 3600, // 1 hour in seconds
+  // MongoDB settings
+  mongoUri: process.env.MONGODB_URI || 'mongodb://localhost:27017/cuhk-course-planner',
+  // JWT settings
+  jwtSecret: process.env.JWT_SECRET || 'your-secret-key-change-in-production',
+  // Email settings
+  smtpHost: process.env.SMTP_HOST || 'smtp.gmail.com',
+  smtpPort: process.env.SMTP_PORT || 587,
+  smtpUser: process.env.SMTP_USER,
+  smtpPass: process.env.SMTP_PASS,
+  smtpFrom: process.env.SMTP_FROM || '"CUHK Course Planner" <noreply@cuhk-course-planner.com>',
 };
 
 module.exports = config; 
