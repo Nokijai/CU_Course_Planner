@@ -20,11 +20,11 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
-  verificationToken: {
+  verificationCode: {
     type: String,
     default: null
   },
-  verificationTokenExpires: {
+  verificationCodeExpires: {
     type: Date,
     default: null
   },
@@ -41,7 +41,7 @@ const userSchema = new mongoose.Schema({
 });
 
 // Index for faster queries
-userSchema.index({ verificationToken: 1 });
+userSchema.index({ verificationCode: 1 });
 
 // Pre-save middleware to hash password
 userSchema.pre('save', async function(next) {
@@ -63,17 +63,17 @@ userSchema.methods.comparePassword = async function(candidatePassword) {
   return await bcrypt.compare(candidatePassword, this.password);
 };
 
-// Instance method to check if verification token is expired
-userSchema.methods.isVerificationTokenExpired = function() {
-  if (!this.verificationTokenExpires) return true;
-  return Date.now() > this.verificationTokenExpires.getTime();
+// Instance method to check if verification code is expired
+userSchema.methods.isVerificationCodeExpired = function() {
+  if (!this.verificationCodeExpires) return true;
+  return Date.now() > this.verificationCodeExpires.getTime();
 };
 
-// Static method to find user by verification token
-userSchema.statics.findByVerificationToken = function(token) {
+// Static method to find user by verification code
+userSchema.statics.findByVerificationCode = function(code) {
   return this.findOne({ 
-    verificationToken: token,
-    verificationTokenExpires: { $gt: Date.now() }
+    verificationCode: code,
+    verificationCodeExpires: { $gt: Date.now() }
   });
 };
 

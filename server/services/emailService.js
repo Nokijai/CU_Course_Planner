@@ -52,17 +52,14 @@ class EmailService {
   }
 
   // Send verification email
-  async sendVerificationEmail(email, verificationToken, baseUrl) {
+  async sendVerificationEmail(email, verificationCode) {
     try {
-      // For development, use a direct API call URL
-      const verificationUrl = `${baseUrl}/api/auth/verify-email?token=${verificationToken}`;
-      
       const mailOptions = {
         from: process.env.SMTP_FROM || '"CUHK Course Planner" <noreply@cuhk-course-planner.com>',
         to: email,
         subject: 'Verify Your Email - CUHK Course Planner',
-        html: this.getVerificationEmailTemplate(verificationUrl),
-        text: this.getVerificationEmailText(verificationUrl)
+        html: this.getVerificationEmailTemplate(verificationCode),
+        text: this.getVerificationEmailText(verificationCode)
       };
 
       const info = await this.transporter.sendMail(mailOptions);
@@ -79,9 +76,10 @@ class EmailService {
       throw new Error('Failed to send verification email');
     }
   }
+ 
 
   // HTML template for verification email
-  getVerificationEmailTemplate(verificationUrl) {
+  getVerificationEmailTemplate(verificationCode) {
     return `
       <!DOCTYPE html>
       <html>
@@ -93,7 +91,7 @@ class EmailService {
           .container { max-width: 600px; margin: 0 auto; padding: 20px; }
           .header { background: #1e40af; color: white; padding: 20px; text-align: center; }
           .content { padding: 20px; background: #f9fafb; }
-          .button { display: inline-block; padding: 12px 24px; background: #1e40af; color: white; text-decoration: none; border-radius: 5px; margin: 20px 0; }
+          .code { font-size: 32px; font-weight: bold; color: #1e40af; text-align: center; padding: 20px; background: #e5e7eb; border-radius: 8px; margin: 20px 0; letter-spacing: 4px; }
           .footer { text-align: center; padding: 20px; color: #6b7280; font-size: 14px; }
         </style>
       </head>
@@ -105,11 +103,9 @@ class EmailService {
           <div class="content">
             <h2>Verify Your Email Address</h2>
             <p>Thank you for registering with CUHK Course Planner!</p>
-            <p>Please click the button below to verify your email address:</p>
-            <a href="${verificationUrl}" class="button">Verify Email</a>
-            <p>If the button doesn't work, you can copy and paste this link into your browser:</p>
-            <p><a href="${verificationUrl}">${verificationUrl}</a></p>
-            <p>This link will expire in 24 hours for security reasons.</p>
+            <p>Your verification code is:</p>
+            <div class="code">${verificationCode}</div>
+            <p><strong>Please enter this code in the verification page within 1 minute.</strong></p>
             <p>If you didn't create an account with CUHK Course Planner, you can safely ignore this email.</p>
           </div>
           <div class="footer">
@@ -121,18 +117,16 @@ class EmailService {
     `;
   }
 
-  // Plain text version of verification email
-  getVerificationEmailText(verificationUrl) {
+    // Plain text version of verification email
+  getVerificationEmailText(verificationCode) {
     return `
 CUHK Course Planner - Verify Your Email Address
 
 Thank you for registering with CUHK Course Planner!
 
-Please click the link below to verify your email address:
+Your verification code is: ${verificationCode}
 
-${verificationUrl}
-
-This link will expire in 24 hours for security reasons.
+Please enter this code in the verification page within 1 minute.
 
 If you didn't create an account with CUHK Course Planner, you can safely ignore this email.
 
@@ -140,6 +134,8 @@ Best regards,
 CUHK Course Planner Team
     `;
   }
+
+
 
   // Test email service
   async testConnection() {

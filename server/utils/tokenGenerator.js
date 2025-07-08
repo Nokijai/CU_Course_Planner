@@ -1,11 +1,11 @@
 const crypto = require('crypto');
 
 /**
- * Generate a secure random token for email verification
- * @returns {string} A secure random token
+ * Generate a 6-digit verification code
+ * @returns {string} A 6-digit verification code
  */
-function generateVerificationToken() {
-  return crypto.randomBytes(32).toString('hex');
+function generateVerificationCode() {
+  return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
 /**
@@ -41,7 +41,7 @@ function generateSignedToken(payload, secret) {
 }
 
 module.exports = {
-  generateVerificationToken,
+  generateVerificationCode,
   generateSecureToken,
   generateSignedToken
 }; 

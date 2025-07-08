@@ -24,8 +24,7 @@ async function testEmailSetup() {
     const testEmail = process.env.TEST_EMAIL || 'test@example.com';
     const result = await emailService.sendVerificationEmail(
       testEmail,
-      'test-verification-token-123',
-      'http://localhost:3002'
+      '123456'
     );
     
     if (result.success) {

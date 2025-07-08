@@ -2,7 +2,7 @@ const express = require('express');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const emailService = require('../services/emailService');
-const { generateVerificationToken } = require('../utils/tokenGenerator');
+const { generateVerificationCode } = require('../utils/tokenGenerator');
 const config = require('../config/env');
 
 const router = express.Router();
@@ -33,24 +33,23 @@ router.post('/register', async (req, res) => {
       });
     }
 
-    // Generate verification token
-    const verificationToken = generateVerificationToken();
-    const verificationTokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+    // Generate verification code
+    const verificationCode = generateVerificationCode();
+    const verificationCodeExpires = new Date(Date.now() + 60 * 1000); // 1 minute
 
     // Create new user
     const user = new User({
       email: email.toLowerCase(),
       password,
-      verificationToken,
-      verificationTokenExpires
+      verificationCode,
+      verificationCodeExpires
     });
 
     await user.save();
 
     // Send verification email
     try {
-      const baseUrl = req.protocol + '://' + req.get('host');
-      await emailService.sendVerificationEmail(email, verificationToken, baseUrl);
+      await emailService.sendVerificationEmail(email, verificationCode);
     } catch (emailError) {
       console.error('Failed to send verification email:', emailError);
       // Don't fail the registration if email fails, but log it
@@ -94,28 +93,28 @@ router.post('/register', async (req, res) => {
 });
 
 /**
- * @route   GET /api/auth/verify-email
- * @desc    Verify user's email using token
+ * @route   POST /api/auth/verify-email
+ * @desc    Verify user's email using 6-digit code
  * @access  Public
  */
-router.get('/verify-email', async (req, res) => {
+router.post('/verify-email', async (req, res) => {
   try {
-    const { token } = req.query;
+    const { email, code } = req.body;
 
-    if (!token) {
+    if (!email || !code) {
       return res.status(400).json({
         success: false,
-        message: 'Verification token is required'
+        message: 'Email and verification code are required'
       });
     }
 
-    // Find user by verification token
-    const user = await User.findByVerificationToken(token);
+    // Find user by verification code
+    const user = await User.findByVerificationCode(code);
 
-    if (!user) {
+    if (!user || user.email !== email.toLowerCase()) {
       return res.status(400).json({
         success: false,
-        message: 'Invalid or expired verification token'
+        message: 'Invalid or expired verification code'
       });
     }
 
@@ -129,8 +128,8 @@ router.get('/verify-email', async (req, res) => {
 
     // Verify the email
     user.isEmailVerified = true;
-    user.verificationToken = null;
-    user.verificationTokenExpires = null;
+    user.verificationCode = null;
+    user.verificationCodeExpires = null;
     await user.save();
 
     res.json({
@@ -261,19 +260,18 @@ router.post('/resend-verification', async (req, res) => {
       });
     }
 
-    // Generate new verification token
-    const verificationToken = generateVerificationToken();
-    const verificationTokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+    // Generate new verification code
+    const verificationCode = generateVerificationCode();
+    const verificationCodeExpires = new Date(Date.now() + 60 * 1000); // 1 minute
 
-    // Update user with new token
-    user.verificationToken = verificationToken;
-    user.verificationTokenExpires = verificationTokenExpires;
+    // Update user with new code
+    user.verificationCode = verificationCode;
+    user.verificationCodeExpires = verificationCodeExpires;
     await user.save();
 
     // Send verification email
     try {
-      const baseUrl = req.protocol + '://' + req.get('host');
-      await emailService.sendVerificationEmail(email, verificationToken, baseUrl);
+      await emailService.sendVerificationEmail(email, verificationCode);
     } catch (emailError) {
       console.error('Failed to send verification email:', emailError);
       return res.status(500).json({
