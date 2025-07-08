@@ -156,16 +156,16 @@ function CourseSearchPage() {
   // Auto-search when filters change
   useEffect(() => {
     const performAutoSearch = async () => {
-      // Always search if there are filters selected, regardless of query
       if (selectedSubjects.length > 0 || selectedAcademicGroups.length > 0 || selectedCareers.length > 0 || selectedUnits.length > 0) {
         setLoading(true);
         setError(null);
         try {
           const params = new URLSearchParams();
-          // Only add query if there are no subject filters (to avoid conflicts)
-          if (query.trim() && selectedSubjects.length === 0) {
+          
+          if (query.trim()) {
             params.append('q', query.trim());
           }
+          
           if (selectedSubjects.length > 0) {
             params.append('subjects', selectedSubjects.join(','));
           }
@@ -179,7 +179,6 @@ function CourseSearchPage() {
             params.append('units', selectedUnits.join(','));
           }
           
-          // Add pagination parameters
           params.append('page', currentPage.toString());
           params.append('limit', pageSize.toString());
           
@@ -201,14 +200,12 @@ function CourseSearchPage() {
           setLoading(false);
         }
       } else if (query.trim()) {
-        // Only search by query if no filters are selected
         setLoading(true);
         setError(null);
         try {
           const params = new URLSearchParams();
           params.append('q', query.trim());
           
-          // Add pagination parameters
           params.append('page', currentPage.toString());
           params.append('limit', pageSize.toString());
           
@@ -230,7 +227,6 @@ function CourseSearchPage() {
           setLoading(false);
         }
       } else {
-        // Clear results when no filters are selected and no query
         setResults([]);
         setError(null);
         setPagination({
@@ -244,7 +240,6 @@ function CourseSearchPage() {
       }
     };
 
-    // Add a small delay to avoid too many API calls
     const timeoutId = setTimeout(performAutoSearch, 300);
     return () => clearTimeout(timeoutId);
   }, [selectedSubjects, selectedAcademicGroups, selectedCareers, selectedUnits, query, currentPage, pageSize]);
@@ -253,7 +248,6 @@ function CourseSearchPage() {
     e.preventDefault();
     if (!query.trim() && selectedSubjects.length === 0 && selectedAcademicGroups.length === 0 && selectedCareers.length === 0 && selectedUnits.length === 0) return;
     
-    // Trigger the auto-search effect by updating the query
     setQuery(query.trim());
   };
 
@@ -261,7 +255,6 @@ function CourseSearchPage() {
     const schedule = getSchedule() || [];
     const newSchedule = [...schedule, course];
     saveSchedule(newSchedule);
-    // Force re-render to update button states
     setResults(prevResults => [...prevResults]);
   };
 
@@ -269,7 +262,6 @@ function CourseSearchPage() {
     const favorites = getFavorites() || [];
     const newFavorites = [...favorites, course];
     saveFavorites(newFavorites);
-    // Force re-render to update button states
     setResults(prevResults => [...prevResults]);
   };
 
@@ -277,7 +269,6 @@ function CourseSearchPage() {
     const schedule = getSchedule() || [];
     const newSchedule = schedule.filter(c => c.subject !== course.subject || c.code !== course.code);
     saveSchedule(newSchedule);
-    // Force re-render to update button states
     setResults(prevResults => [...prevResults]);
   };
 
@@ -285,7 +276,6 @@ function CourseSearchPage() {
     const favorites = getFavorites() || [];
     const newFavorites = favorites.filter(c => c.subject !== course.subject || c.code !== course.code);
     saveFavorites(newFavorites);
-    // Force re-render to update button states
     setResults(prevResults => [...prevResults]);
   };
 
@@ -350,7 +340,7 @@ function CourseSearchPage() {
 
   const handlePageSizeChange = (newPageSize) => {
     setPageSize(newPageSize);
-    setCurrentPage(1); // Reset to first page when changing page size
+    setCurrentPage(1);
   };
 
   const selectAllSubjects = () => {
@@ -369,187 +359,17 @@ function CourseSearchPage() {
     setSelectedUnits(filteredUnits);
   };
 
-  // Filter subjects based on search term (starts with)
   const filteredSubjects = subjects.filter(subject =>
     subject.toLowerCase().startsWith(subjectSearchTerm.toLowerCase())
   );
 
-  // Filter academic groups based on search term (starts with)
   const filteredAcademicGroups = academicGroups.filter(group =>
     group.toLowerCase().startsWith(academicGroupSearchTerm.toLowerCase())
   );
 
-  // Filter units based on search term (starts with)
   const filteredUnits = units.filter(unit =>
     unit.toLowerCase().startsWith(unitSearchTerm.toLowerCase())
   );
-
-  // Helper function to check if a section has subsections
-  const hasSubsections = (sectionName, sections) => {
-    // Extract the section prefix (e.g., "A" from "A-LEC", "--" from "--LEC")
-    const sectionPrefix = sectionName.split('-')[0];
-    
-    console.log(`Checking if ${sectionName} has subsections. Prefix: "${sectionPrefix}"`);
-    
-    // Check if there are other sections that are related
-    const hasSubs = Object.keys(sections).some(name => {
-      if (name === sectionName) return false;
-      
-      const otherPrefix = name.split('-')[0];
-      
-      // Check for different relationship patterns:
-      // 1. Same prefix (e.g., A-LEC and A-TUT)
-      // 2. Main section with tutorial/lab (e.g., A-LEC and AT01-TUT)
-      // 3. Main section with tutorial/lab (e.g., B-LEC and BT01-TUT)
-      
-      let isRelated = false;
-      
-      // Pattern 1: Same prefix
-      if (otherPrefix === sectionPrefix) {
-        isRelated = true;
-      }
-      // Pattern 2: Main section (A-LEC) with tutorial (AT01-TUT)
-      else if (sectionPrefix.length === 1 && otherPrefix.startsWith(sectionPrefix) && otherPrefix.length > 1) {
-        isRelated = true;
-      }
-      // Pattern 3: Tutorial (AT01-TUT) with main section (A-LEC)
-      else if (otherPrefix.length === 1 && sectionPrefix.startsWith(otherPrefix) && sectionPrefix.length > 1) {
-        isRelated = true;
-      }
-      
-      if (isRelated) {
-        console.log(`  Found related section: ${name} (prefix: "${otherPrefix}")`);
-      }
-      return isRelated;
-    });
-    
-    console.log(`  Result: ${sectionName} hasSubs = ${hasSubs}`);
-    return hasSubs;
-  };
-
-  // Helper function to get related subsections
-  const getRelatedSubsections = (sectionName, sections) => {
-    // Extract the section prefix (e.g., "A" from "A-LEC", "--" from "--LEC")
-    const sectionPrefix = sectionName.split('-')[0];
-    
-    // Return sections that are related based on the same patterns
-    return Object.entries(sections).filter(([name]) => {
-      if (name === sectionName) return false;
-      
-      const otherPrefix = name.split('-')[0];
-      
-      // Check for different relationship patterns:
-      // 1. Same prefix (e.g., A-LEC and A-TUT)
-      // 2. Main section with tutorial/lab (e.g., A-LEC and AT01-TUT)
-      // 3. Main section with tutorial/lab (e.g., B-LEC and BT01-TUT)
-      
-      // Pattern 1: Same prefix
-      if (otherPrefix === sectionPrefix) {
-        return true;
-      }
-      // Pattern 2: Main section (A-LEC) with tutorial (AT01-TUT)
-      else if (sectionPrefix.length === 1 && otherPrefix.startsWith(sectionPrefix) && otherPrefix.length > 1) {
-        return true;
-      }
-      // Pattern 3: Tutorial (AT01-TUT) with main section (A-LEC)
-      else if (otherPrefix.length === 1 && sectionPrefix.startsWith(otherPrefix) && sectionPrefix.length > 1) {
-        return true;
-      }
-      
-      return false;
-    });
-  };
-
-  // Open section selection modal
-  const openSectionModal = async (course) => {
-    console.log('Opening modal for course:', course.subject, course.code);
-    
-    // Fetch the full course data to get sections
-    try {
-      const res = await fetch(`/api/courses/${course.subject}/${course.code}`);
-      if (!res.ok) throw new Error('Course not found');
-      const data = await res.json();
-      const fullCourse = data.data;
-      
-      setCurrentCourse(fullCourse);
-      
-      // Get the first term (or you could let user choose)
-      const firstTerm = Object.keys(fullCourse.terms)[0];
-      setCurrentTerm(firstTerm);
-      
-      // Pre-select sections that are already in schedule
-      const schedule = getSchedule() || [];
-      const scheduleCourse = schedule.find(c => c.subject === course.subject && c.code === course.code);
-      if (scheduleCourse && scheduleCourse.selectedSections) {
-        setSelectedSections(new Set(scheduleCourse.selectedSections));
-      } else {
-        setSelectedSections(new Set());
-      }
-      
-      setShowSectionModal(true);
-    } catch (err) {
-      console.error('Failed to fetch course details:', err);
-      // Fallback to simple add to schedule
-      addToSchedule(course);
-    }
-  };
-
-  // Close section selection modal
-  const closeSectionModal = () => {
-    setShowSectionModal(false);
-    setSelectedSections(new Set());
-    setCurrentCourse(null);
-    setCurrentTerm('');
-  };
-
-  // Toggle section selection
-  const toggleSectionSelection = (sectionName) => {
-    console.log('Toggling section:', sectionName);
-    const newSelected = new Set(selectedSections);
-    if (newSelected.has(sectionName)) {
-      newSelected.delete(sectionName);
-      console.log('Removed section:', sectionName);
-    } else {
-      newSelected.add(sectionName);
-      console.log('Added section:', sectionName);
-    }
-    console.log('Current selected sections:', Array.from(newSelected));
-    setSelectedSections(newSelected);
-  };
-
-  // Add selected sections to schedule
-  const addSelectedSectionsToSchedule = () => {
-    if (!currentCourse || selectedSections.size === 0) return;
-    
-    console.log('Adding sections to schedule:', Array.from(selectedSections));
-    console.log('Current course:', currentCourse.subject, currentCourse.code);
-    
-    const schedule = getSchedule() || [];
-    const existingCourseIndex = schedule.findIndex(c => c.subject === currentCourse.subject && c.code === currentCourse.code);
-    
-    if (existingCourseIndex >= 0) {
-      // Course already exists, update its sections
-      const updatedCourse = {
-        ...schedule[existingCourseIndex],
-        selectedSections: Array.from(selectedSections)
-      };
-      schedule[existingCourseIndex] = updatedCourse;
-      console.log('Updated existing course with sections:', updatedCourse.selectedSections);
-    } else {
-      // Add new course with selected sections
-      const newCourse = {
-        ...currentCourse,
-        selectedSections: Array.from(selectedSections)
-      };
-      schedule.push(newCourse);
-      console.log('Added new course with sections:', newCourse.selectedSections);
-    }
-    
-    saveSchedule(schedule);
-    closeSectionModal();
-    // Force re-render to update button states
-    setResults(prevResults => [...prevResults]);
-  };
 
   return (
     <div className="max-w-6xl mx-auto p-4">
@@ -558,7 +378,6 @@ function CourseSearchPage() {
         <p className="text-gray-600">Find courses by course code, keyword, subject, or instructor</p>
       </div>
 
-      {/* Search Form */}
       <div className="bg-white rounded-lg shadow-sm border p-6 mb-6">
         <form onSubmit={handleSearch} className="space-y-4">
           <div className="flex gap-4">
@@ -589,7 +408,6 @@ function CourseSearchPage() {
             </button>
           </div>
 
-          {/* Filters */}
           {showFilters && (
             <div className="border-t pt-4">
               <div className="flex justify-between items-center mb-4">
@@ -604,7 +422,6 @@ function CourseSearchPage() {
               </div>
               
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                {/* Subjects */}
                 <div>
                   <div className="flex justify-between items-center mb-3">
                     <h4 className="text-sm font-medium text-gray-700">Subjects</h4>
@@ -650,7 +467,6 @@ function CourseSearchPage() {
                   </div>
                 </div>
 
-                {/* Academic Groups */}
                 <div>
                   <div className="flex justify-between items-center mb-3">
                     <h4 className="text-sm font-medium text-gray-700">Academic Groups</h4>
@@ -696,7 +512,6 @@ function CourseSearchPage() {
                   </div>
                 </div>
 
-                {/* Careers */}
                 <div>
                   <div className="flex justify-between items-center mb-3">
                     <h4 className="text-sm font-medium text-gray-700">Career Level</h4>
@@ -724,7 +539,6 @@ function CourseSearchPage() {
                   </div>
                 </div>
 
-                {/* Units */}
                 <div>
                   <div className="flex justify-between items-center mb-3">
                     <h4 className="text-sm font-medium text-gray-700">Units</h4>
@@ -775,7 +589,6 @@ function CourseSearchPage() {
         </form>
       </div>
 
-      {/* Results */}
       {loading && (
         <div className="flex justify-center py-8">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
@@ -796,108 +609,70 @@ function CourseSearchPage() {
               {results.length} course{results.length !== 1 ? 's' : ''} found (of {pagination.totalCourses} total)
             </h2>
             <div className="flex items-center gap-4">
-              {/* Pagination Controls - Top */}
-              {pagination.totalPages > 1 && (
+              {totalPages > 1 && (
                 <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handlePageChange(currentPage - 1)}
+                    disabled={currentPage === 1}
+                    className={`flex items-center gap-1 px-2 py-1 rounded text-sm font-medium transition-colors ${
+                      currentPage === 1
+                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                        : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    <ChevronLeft className="h-3 w-3" />
+                    Prev
+                  </button>
                   
-                  
-                  <div className="flex items-center gap-2">
-                    {/* Previous button with arrow */}
-                    <button
-                      onClick={() => handlePageChange(pagination.currentPage - 1)}
-                      disabled={!pagination.hasPrevPage}
-                      className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors whitespace-nowrap ${
-                        pagination.hasPrevPage
-                          ? 'bg-blue-100 text-blue-700 hover:bg-blue-200'
-                          : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                      }`}
-                    >
-                      ← Previous
-                    </button>
-                    
-                    {/* Page numbers with smart navigation */}
-                    <div className="flex items-center gap-1">
-                      {/* First page (1) - show when not on first few pages */}
-                      {pagination.currentPage > 3 && pagination.totalPages > 5 && (
-                        <>
-                          <button
-                            onClick={() => handlePageChange(1)}
-                            className="px-3 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
-                          >
-                            1
-                          </button>
-                          {pagination.currentPage > 4 && (
-                            <span className="px-2 text-gray-400">...</span>
-                          )}
-                        </>
-                      )}
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: Math.min(3, totalPages) }, (_, i) => {
+                      let pageNum;
+                      if (totalPages <= 3) {
+                        pageNum = i + 1;
+                      } else if (currentPage <= 2) {
+                        pageNum = i + 1;
+                      } else if (currentPage >= totalPages - 1) {
+                        pageNum = totalPages - 2 + i;
+                      } else {
+                        pageNum = currentPage - 1 + i;
+                      }
                       
-                      {/* Page numbers around current page */}
-                      {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
-                        let pageNum;
-                        if (pagination.totalPages <= 5) {
-                          pageNum = i + 1;
-                        } else if (pagination.currentPage <= 3) {
-                          pageNum = i + 1;
-                        } else if (pagination.currentPage >= pagination.totalPages - 2) {
-                          pageNum = pagination.totalPages - 4 + i;
-                        } else {
-                          pageNum = pagination.currentPage - 2 + i;
-                        }
-                        
-                        return (
-                          <button
-                            key={pageNum}
-                            onClick={() => handlePageChange(pageNum)}
-                            className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                              pageNum === pagination.currentPage
-                                ? 'bg-blue-600 text-white'
-                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                            }`}
-                          >
-                            {pageNum}
-                          </button>
-                        );
-                      })}
-                      
-                      {/* Last page - show when not on last few pages */}
-                      {pagination.currentPage < pagination.totalPages - 2 && pagination.totalPages > 5 && (
-                        <>
-                          {pagination.currentPage < pagination.totalPages - 3 && (
-                            <span className="px-2 text-gray-400">...</span>
-                          )}
-                          <button
-                            onClick={() => handlePageChange(pagination.totalPages)}
-                            className="px-3 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
-                          >
-                            {pagination.totalPages}
-                          </button>
-                        </>
-                      )}
-                    </div>
-                    
-                    {/* Next button with arrow */}
-                    <button
-                      onClick={() => handlePageChange(pagination.currentPage + 1)}
-                      disabled={!pagination.hasNextPage}
-                      className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors whitespace-nowrap ${
-                        pagination.hasNextPage
-                          ? 'bg-blue-100 text-blue-700 hover:bg-blue-200'
-                          : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                      }`}
-                    >
-                      Next →
-                    </button>
+                      return (
+                        <button
+                          key={pageNum}
+                          onClick={() => handlePageChange(pageNum)}
+                          className={`px-2 py-1 rounded text-sm font-medium transition-colors ${
+                            currentPage === pageNum
+                              ? 'bg-blue-600 text-white'
+                              : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+                          }`}
+                        >
+                          {pageNum}
+                        </button>
+                      );
+                    })}
                   </div>
+                  
+                  <button
+                    onClick={() => handlePageChange(currentPage + 1)}
+                    disabled={currentPage === totalPages}
+                    className={`flex items-center gap-1 px-2 py-1 rounded text-sm font-medium transition-colors ${
+                      currentPage === totalPages
+                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                        : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    Next
+                    <ChevronRight className="h-3 w-3" />
+                  </button>
                 </div>
               )}
               
               <div className="flex items-center gap-2">
-                <label htmlFor="pageSize" className="text-sm text-gray-600">Show:</label>
+                <span className="text-sm text-gray-600">Show:</span>
                 <select
-                  id="pageSize"
                   value={pageSize}
-                  onChange={(e) => handlePageSizeChange(parseInt(e.target.value))}
+                  onChange={(e) => handlePageSizeChange(Number(e.target.value))}
                   className="border border-gray-300 rounded-lg px-3 py-1 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
                   <option value={10}>10</option>
@@ -907,6 +682,12 @@ function CourseSearchPage() {
                 <span className="text-sm text-gray-600">per page</span>
               </div>
             </div>
+          </div>
+          
+          <div className="text-sm text-gray-600 text-center">
+            Showing {((currentPage - 1) * pageSize) + 1} to{' '}
+            {Math.min(currentPage * pageSize, pagination.totalCourses)} of{' '}
+            {pagination.totalCourses} results
           </div>
           
           <div className="grid gap-4">
@@ -937,7 +718,7 @@ function CourseSearchPage() {
                   </div>
                   <div className="flex gap-2 ml-4">
                     <button
-                      onClick={() => isInSchedule(course) ? removeFromSchedule(course) : openSectionModal(course)}
+                      onClick={() => isInSchedule(course) ? removeFromSchedule(course) : addToSchedule(course)}
                       className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                         isInSchedule(course)
                           ? 'bg-red-100 text-red-700 hover:bg-red-200'
@@ -982,106 +763,6 @@ function CourseSearchPage() {
               </div>
             ))}
           </div>
-          
-          {/* Pagination Controls */}
-          {pagination.totalPages > 1 && (
-            <div className="flex justify-between items-center mt-6 pt-6 border-t border-gray-200">
-              <div className="text-sm text-gray-600">
-                Showing {((pagination.currentPage - 1) * pagination.pageSize) + 1} to{' '}
-                {Math.min(pagination.currentPage * pagination.pageSize, pagination.totalCourses)} of{' '}
-                {pagination.totalCourses} results
-              </div>
-              
-              <div className="flex items-center gap-2">
-                {/* Previous button with arrow */}
-                <button
-                  onClick={() => handlePageChange(pagination.currentPage - 1)}
-                  disabled={!pagination.hasPrevPage}
-                  className={`flex items-center gap-1 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                    pagination.hasPrevPage
-                      ? 'bg-blue-100 text-blue-700 hover:bg-blue-200'
-                      : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                  }`}
-                >
-                  ← Previous
-                </button>
-                
-                {/* Page numbers with smart navigation */}
-                <div className="flex items-center gap-1">
-                  {/* First page (1) - show when not on first few pages */}
-                  {pagination.currentPage > 3 && pagination.totalPages > 5 && (
-                    <>
-                      <button
-                        onClick={() => handlePageChange(1)}
-                        className="px-3 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
-                      >
-                        1
-                      </button>
-                      {pagination.currentPage > 4 && (
-                        <span className="px-2 text-gray-400">...</span>
-                      )}
-                    </>
-                  )}
-                  
-                  {/* Page numbers around current page */}
-                  {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
-                    let pageNum;
-                    if (pagination.totalPages <= 5) {
-                      pageNum = i + 1;
-                    } else if (pagination.currentPage <= 3) {
-                      pageNum = i + 1;
-                    } else if (pagination.currentPage >= pagination.totalPages - 2) {
-                      pageNum = pagination.totalPages - 4 + i;
-                    } else {
-                      pageNum = pagination.currentPage - 2 + i;
-                    }
-                    
-                    return (
-                      <button
-                        key={pageNum}
-                        onClick={() => handlePageChange(pageNum)}
-                        className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                          pageNum === pagination.currentPage
-                            ? 'bg-blue-600 text-white'
-                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                        }`}
-                      >
-                        {pageNum}
-                      </button>
-                    );
-                  })}
-                  
-                  {/* Last page - show when not on last few pages */}
-                  {pagination.currentPage < pagination.totalPages - 2 && pagination.totalPages > 5 && (
-                    <>
-                      {pagination.currentPage < pagination.totalPages - 3 && (
-                        <span className="px-2 text-gray-400">...</span>
-                      )}
-                      <button
-                        onClick={() => handlePageChange(pagination.totalPages)}
-                        className="px-3 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
-                      >
-                        {pagination.totalPages}
-                      </button>
-                    </>
-                  )}
-                </div>
-                
-                {/* Next button with arrow */}
-                <button
-                  onClick={() => handlePageChange(pagination.currentPage + 1)}
-                  disabled={!pagination.hasNextPage}
-                  className={`flex items-center gap-1 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                    pagination.hasNextPage
-                      ? 'bg-blue-100 text-blue-700 hover:bg-blue-200'
-                      : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                  }`}
-                >
-                  Next →
-                </button>
-              </div>
-            </div>
-          )}
         </div>
       )}
 
@@ -1093,7 +774,6 @@ function CourseSearchPage() {
         </div>
       )}
 
-      {/* Section Selection Modal */}
       {showSectionModal && currentCourse && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-8 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto">
@@ -1102,7 +782,7 @@ function CourseSearchPage() {
                 Select Sections for {currentCourse.subject} {currentCourse.code}
               </h2>
               <button
-                onClick={closeSectionModal}
+                onClick={() => setShowSectionModal(false)}
                 className="text-gray-400 hover:text-gray-600"
               >
                 <X className="h-6 w-6" />
@@ -1147,7 +827,6 @@ function CourseSearchPage() {
                       </div>
                     </div>
                     
-                    {/* Section details */}
                     <div className="ml-8 text-sm text-gray-600">
                       {section.days && section.startTimes && section.endTimes && (
                         <div className="mb-2">
@@ -1173,7 +852,6 @@ function CourseSearchPage() {
                         </div>
                       )}
                       
-                      {/* Show related subsections */}
                       {hasSubs && relatedSubsections.length > 0 && (
                         <div className="mt-3 pt-3 border-t border-gray-100">
                           <div className="text-xs text-gray-500 font-medium mb-2">Related Sessions:</div>
@@ -1197,7 +875,7 @@ function CourseSearchPage() {
 
             <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
               <button
-                onClick={closeSectionModal}
+                onClick={() => setShowSectionModal(false)}
                 className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg font-medium transition-colors"
               >
                 Cancel
