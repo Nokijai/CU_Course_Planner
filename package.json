@@ -1,0 +1,19 @@
+{
+  "name": "cuhk-course-planner",
+  "version": "1.0.0",
+  "description": "CUHK Course Planner with ngrok support for public testing",
+  "scripts": {
+    "install-all": "cd server && npm install && cd ../client && npm install",
+    "start": "concurrently \"cd server && npm start\" \"cd client && npm run dev\"",
+    "start-ngrok": "./start-ngrok.sh",
+    "dev": "concurrently \"cd server && npm run dev\" \"cd client && npm run dev\"",
+    "build": "cd client && npm run build",
+    "test": "echo \"No tests specified\" && exit 0"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "keywords": ["cuhk", "course", "planner", "ngrok", "testing"],
+  "author": "CUHK Course Planner Team",
+  "license": "MIT"
+} 

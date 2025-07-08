@@ -11,11 +11,46 @@ const app = express();
 // Security middleware
 app.use(helmet());
 
-// CORS configuration
-app.use(cors({
-  origin: config.corsOrigin,
+// CORS configuration with support for multiple origins and ngrok
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    // If corsOrigin is a string, use it directly
+    if (typeof config.corsOrigin === 'string') {
+      return callback(null, config.corsOrigin);
+    }
+    
+    // If corsOrigin is an array, check if origin matches any pattern
+    if (Array.isArray(config.corsOrigin)) {
+      const isAllowed = config.corsOrigin.some(allowedOrigin => {
+        // Handle wildcard patterns for ngrok
+        if (allowedOrigin.includes('*')) {
+          const pattern = allowedOrigin.replace('*', '.*');
+          return new RegExp(pattern).test(origin);
+        }
+        return allowedOrigin === origin;
+      });
+      
+      if (isAllowed) {
+        return callback(null, true);
+      }
+    }
+    
+    // Default: allow localhost and ngrok domains in development
+    if (config.nodeEnv === 'development') {
+      if (origin.includes('localhost') || origin.includes('ngrok')) {
+        return callback(null, true);
+      }
+    }
+    
+    callback(new Error('Not allowed by CORS'));
+  },
   credentials: true
-}));
+};
+
+app.use(cors(corsOptions));
 
 // Logging middleware
 if (config.nodeEnv === 'development') {
