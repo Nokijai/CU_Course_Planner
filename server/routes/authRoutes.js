@@ -1,6 +1,7 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const PendingRegistration = require('../models/PendingRegistration');
 const emailService = require('../services/emailService');
 const { generateVerificationCode } = require('../utils/tokenGenerator');
 const config = require('../config/env');
@@ -9,7 +10,7 @@ const router = express.Router();
 
 /**
  * @route   POST /api/auth/register
- * @desc    Register a new user and send verification email (user not saved until verified)
+ * @desc    Register a new user and send verification email
  * @access  Public
  */
 router.post('/register', async (req, res) => {
@@ -24,9 +25,11 @@ router.post('/register', async (req, res) => {
       });
     }
 
-    // Check if user already exists
+    // Check if user already exists (both in User and PendingRegistration)
     const existingUser = await User.findOne({ email: email.toLowerCase() });
-    if (existingUser) {
+    const existingPending = await PendingRegistration.findOne({ email: email.toLowerCase() });
+    
+    if (existingUser || existingPending) {
       return res.status(409).json({
         success: false,
         message: 'User with this email already exists'
@@ -37,27 +40,23 @@ router.post('/register', async (req, res) => {
     const verificationCode = generateVerificationCode();
     const verificationCodeExpires = new Date(Date.now() + 60 * 1000); // 1 minute
 
-    // Store registration data temporarily (in memory or cache)
-    // For now, we'll use a simple approach with a temporary user document
-    // In production, you might want to use Redis or another cache
-    const tempUser = new User({
+    // Create pending registration (not actual user yet)
+    const pendingRegistration = new PendingRegistration({
       email: email.toLowerCase(),
       password,
       verificationCode,
-      verificationCodeExpires,
-      isEmailVerified: false
+      verificationCodeExpires
     });
 
-    // Save temporarily - this will be cleaned up if not verified
-    await tempUser.save();
+    await pendingRegistration.save();
 
     // Send verification email
     try {
       await emailService.sendVerificationEmail(email, verificationCode);
     } catch (emailError) {
       console.error('Failed to send verification email:', emailError);
-      // Clean up the temporary user if email fails
-      await User.findByIdAndDelete(tempUser._id);
+      // Clean up pending registration if email fails
+      await PendingRegistration.findByIdAndDelete(pendingRegistration._id);
       return res.status(500).json({
         success: false,
         message: 'Failed to send verification email. Please try again.'
@@ -66,9 +65,9 @@ router.post('/register', async (req, res) => {
 
     res.status(201).json({
       success: true,
-      message: 'Verification code sent to your email. Please verify your email to complete registration.',
+      message: 'Registration initiated. Please check your email to verify your account.',
       data: {
-        email: tempUser.email,
+        email: pendingRegistration.email,
         isEmailVerified: false
       }
     });
@@ -103,14 +102,12 @@ router.post('/register', async (req, res) => {
 
 /**
  * @route   POST /api/auth/verify-email
- * @desc    Verify user's email using 6-digit code
+ * @desc    Verify user's email using 6-digit code and create actual user
  * @access  Public
  */
 router.post('/verify-email', async (req, res) => {
   try {
     const { email, code } = req.body;
-
-    console.log('Verification request:', { email, code });
 
     if (!email || !code) {
       return res.status(400).json({
@@ -119,61 +116,43 @@ router.post('/verify-email', async (req, res) => {
       });
     }
 
-    // Find user by verification code
-    const user = await User.findByVerificationCode(code);
-    console.log('Found user by code:', user ? { id: user._id, email: user.email } : 'No user found');
+    // Find pending registration by verification code
+    const pendingRegistration = await PendingRegistration.findByVerificationCode(code);
 
-    if (!user || user.email !== email.toLowerCase()) {
-      console.log('Verification failed:', { 
-        userFound: !!user, 
-        userEmail: user?.email, 
-        requestEmail: email.toLowerCase(),
-        emailMatch: user?.email === email.toLowerCase()
-      });
+    if (!pendingRegistration || pendingRegistration.email !== email.toLowerCase()) {
       return res.status(400).json({
         success: false,
         message: 'Invalid or expired verification code'
       });
     }
 
-    // Check if already verified
-    if (user.isEmailVerified) {
+    // Check if user already exists (in case of race condition)
+    const existingUser = await User.findOne({ email: email.toLowerCase() });
+    if (existingUser) {
+      // Clean up pending registration
+      await PendingRegistration.findByIdAndDelete(pendingRegistration._id);
       return res.status(400).json({
         success: false,
-        message: 'Email is already verified'
+        message: 'User already exists'
       });
     }
 
-    // Verify the email and complete registration
-    user.isEmailVerified = true;
-    user.verificationCode = null;
-    user.verificationCodeExpires = null;
-    user.createdAt = new Date(); // Set the actual creation date after verification
+    // Create the actual user
+    const user = new User({
+      email: pendingRegistration.email,
+      password: pendingRegistration.password, // Already hashed
+      isEmailVerified: true,
+      createdAt: new Date()
+    });
+
     await user.save();
 
-    // Generate JWT token for automatic login
-    const token = jwt.sign(
-      { 
-        userId: user._id,
-        email: user.email,
-        isEmailVerified: user.isEmailVerified
-      },
-      process.env.JWT_SECRET || 'your-secret-key',
-      { expiresIn: '7d' }
-    );
+    // Clean up pending registration
+    await PendingRegistration.findByIdAndDelete(pendingRegistration._id);
 
     res.json({
       success: true,
-      message: 'Email verified successfully! Registration completed.',
-      data: {
-        token,
-        user: {
-          id: user._id,
-          email: user.email,
-          isEmailVerified: user.isEmailVerified,
-          lastLogin: user.lastLogin
-        }
-      }
+      message: 'Email verified successfully! You can now log in to your account.'
     });
 
   } catch (error) {
@@ -282,20 +261,12 @@ router.post('/resend-verification', async (req, res) => {
       });
     }
 
-    // Find user
-    const user = await User.findOne({ email: email.toLowerCase() });
-    if (!user) {
+    // Find pending registration
+    const pendingRegistration = await PendingRegistration.findOne({ email: email.toLowerCase() });
+    if (!pendingRegistration) {
       return res.status(404).json({
         success: false,
-        message: 'User not found'
-      });
-    }
-
-    // Check if already verified
-    if (user.isEmailVerified) {
-      return res.status(400).json({
-        success: false,
-        message: 'Email is already verified'
+        message: 'No pending registration found for this email'
       });
     }
 
@@ -303,10 +274,10 @@ router.post('/resend-verification', async (req, res) => {
     const verificationCode = generateVerificationCode();
     const verificationCodeExpires = new Date(Date.now() + 60 * 1000); // 1 minute
 
-    // Update user with new code
-    user.verificationCode = verificationCode;
-    user.verificationCodeExpires = verificationCodeExpires;
-    await user.save();
+    // Update pending registration with new verification code
+    pendingRegistration.verificationCode = verificationCode;
+    pendingRegistration.verificationCodeExpires = verificationCodeExpires;
+    await pendingRegistration.save();
 
     // Send verification email
     try {
@@ -349,7 +320,7 @@ router.post('/forgot-password', async (req, res) => {
       });
     }
 
-    // Find user by email
+    // Find user
     const user = await User.findOne({ email: email.toLowerCase() });
     if (!user) {
       return res.status(404).json({
@@ -358,16 +329,16 @@ router.post('/forgot-password', async (req, res) => {
       });
     }
 
-    // Generate password reset code
+    // Generate reset verification code
     const resetCode = generateVerificationCode();
-    const resetCodeExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+    const resetCodeExpires = new Date(Date.now() + 60 * 1000); // 1 minute
 
     // Update user with reset code
-    user.passwordResetCode = resetCode;
-    user.passwordResetCodeExpires = resetCodeExpires;
+    user.resetCode = resetCode;
+    user.resetCodeExpires = resetCodeExpires;
     await user.save();
 
-    // Send password reset email
+    // Send reset email
     try {
       await emailService.sendPasswordResetEmail(email, resetCode);
     } catch (emailError) {
@@ -380,7 +351,7 @@ router.post('/forgot-password', async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Password reset code sent to your email'
+      message: 'Password reset code sent successfully'
     });
 
   } catch (error) {
@@ -408,11 +379,11 @@ router.post('/verify-reset-code', async (req, res) => {
       });
     }
 
-    // Find user by email and reset code
-    const user = await User.findOne({
+    // Find user by reset code
+    const user = await User.findOne({ 
       email: email.toLowerCase(),
-      passwordResetCode: code,
-      passwordResetCodeExpires: { $gt: Date.now() }
+      resetCode: code,
+      resetCodeExpires: { $gt: new Date() }
     });
 
     if (!user) {
@@ -438,38 +409,33 @@ router.post('/verify-reset-code', async (req, res) => {
 
 /**
  * @route   POST /api/auth/reset-password
- * @desc    Reset password with new password
+ * @desc    Reset user password
  * @access  Public
  */
 router.post('/reset-password', async (req, res) => {
   try {
-    const { email, code, newPassword } = req.body;
+    const { email, newPassword } = req.body;
 
-    if (!email || !code || !newPassword) {
+    if (!email || !newPassword) {
       return res.status(400).json({
         success: false,
-        message: 'Email, verification code, and new password are required'
+        message: 'Email and new password are required'
       });
     }
 
-    // Find user by email and reset code
-    const user = await User.findOne({
-      email: email.toLowerCase(),
-      passwordResetCode: code,
-      passwordResetCodeExpires: { $gt: Date.now() }
-    });
-
+    // Find user
+    const user = await User.findOne({ email: email.toLowerCase() });
     if (!user) {
-      return res.status(400).json({
+      return res.status(404).json({
         success: false,
-        message: 'Invalid or expired reset code'
+        message: 'User not found'
       });
     }
 
     // Update password
     user.password = newPassword;
-    user.passwordResetCode = null;
-    user.passwordResetCodeExpires = null;
+    user.resetCode = null;
+    user.resetCodeExpires = null;
     await user.save();
 
     res.json({
@@ -490,30 +456,6 @@ router.post('/reset-password', async (req, res) => {
       });
     }
 
-    res.status(500).json({
-      success: false,
-      message: 'Internal server error'
-    });
-  }
-});
-
-/**
- * @route   POST /api/auth/cleanup-unverified
- * @desc    Cleanup unverified users (admin/internal use)
- * @access  Public
- */
-router.post('/cleanup-unverified', async (req, res) => {
-  try {
-    const result = await User.cleanupUnverifiedUsers();
-    
-    res.json({
-      success: true,
-      message: `Cleaned up ${result.deletedCount} unverified users`,
-      deletedCount: result.deletedCount
-    });
-
-  } catch (error) {
-    console.error('Cleanup error:', error);
     res.status(500).json({
       success: false,
       message: 'Internal server error'

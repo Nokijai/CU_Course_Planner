@@ -133,6 +133,43 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const verifyEmail = async (email, code) => {
+    try {
+      const response = await fetch('/api/auth/verify-email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, code }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Verification failed');
+      }
+
+      if (data.success) {
+        // After successful verification, automatically log the user in
+        // We'll need to get the user's password or create a session
+        // For now, we'll set a basic user state
+        const verifiedUser = {
+          email: email,
+          isEmailVerified: true,
+          verifiedAt: new Date()
+        };
+        setUser(verifiedUser);
+        toast.success('Email verified successfully! You are now logged in.');
+        return { success: true, user: verifiedUser };
+      } else {
+        throw new Error(data.message || 'Verification failed');
+      }
+    } catch (error) {
+      toast.error(error.message || 'Verification failed');
+      return { success: false, error: error.message };
+    }
+  };
+
   const value = {
     user,
     loading,
@@ -140,6 +177,7 @@ export const AuthProvider = ({ children }) => {
     register,
     logout,
     resendVerification,
+    verifyEmail,
     isAuthenticated: !!user,
   };
 

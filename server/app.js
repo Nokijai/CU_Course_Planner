@@ -8,7 +8,6 @@ const mongoConfig = require('./config/mongodb-atlas');
 const courseRoutes = require('./routes/courseRoutes');
 const authRoutes = require('./routes/authRoutes');
 const { errorHandler, notFound } = require('./middleware/errorMiddleware');
-const User = require('./models/User');
 
 const app = express();
 
@@ -122,18 +121,6 @@ app.listen(PORT, () => {
   console.log(`📊 Environment: ${config.nodeEnv}`);
   console.log(`🌐 CORS Origin: ${config.corsOrigin}`);
   console.log(`📅 Started at: ${new Date().toISOString()}`);
-  
-  // Schedule cleanup of unverified users every 10 minutes
-  setInterval(async () => {
-    try {
-      const result = await User.cleanupUnverifiedUsers();
-      if (result.deletedCount > 0) {
-        console.log(`🧹 Cleaned up ${result.deletedCount} unverified users`);
-      }
-    } catch (error) {
-      console.error('Cleanup error:', error);
-    }
-  }, 10 * 60 * 1000); // 10 minutes
 });
 
 // Graceful shutdown

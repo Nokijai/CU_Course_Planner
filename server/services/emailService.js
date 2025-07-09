@@ -76,6 +76,32 @@ class EmailService {
       throw new Error('Failed to send verification email');
     }
   }
+
+  // Send password reset email
+  async sendPasswordResetEmail(email, resetCode) {
+    try {
+      const mailOptions = {
+        from: process.env.SMTP_FROM || '"CUHK Course Planner" <noreply@cuhk-course-planner.com>',
+        to: email,
+        subject: 'Reset Your Password - CUHK Course Planner',
+        html: this.getPasswordResetEmailTemplate(resetCode),
+        text: this.getPasswordResetEmailText(resetCode)
+      };
+
+      const info = await this.transporter.sendMail(mailOptions);
+      
+      console.log('Password reset email sent:', info.messageId);
+      
+      // Log successful email sending
+      console.log('✅ Password reset email sent successfully to:', email);
+      console.log('📧 Message ID:', info.messageId);
+      
+      return { success: true, messageId: info.messageId };
+    } catch (error) {
+      console.error('Error sending password reset email:', error);
+      throw new Error('Failed to send password reset email');
+    }
+  }
  
 
   // HTML template for verification email
@@ -135,34 +161,6 @@ CUHK Course Planner Team
     `;
   }
 
-
-
-  // Send password reset email
-  async sendPasswordResetEmail(email, resetCode) {
-    try {
-      const mailOptions = {
-        from: process.env.SMTP_FROM || '"CUHK Course Planner" <noreply@cuhk-course-planner.com>',
-        to: email,
-        subject: 'Reset Your Password - CUHK Course Planner',
-        html: this.getPasswordResetEmailTemplate(resetCode),
-        text: this.getPasswordResetEmailText(resetCode)
-      };
-
-      const info = await this.transporter.sendMail(mailOptions);
-      
-      console.log('Password reset email sent:', info.messageId);
-      
-      // Log successful email sending
-      console.log('✅ Password reset email sent successfully to:', email);
-      console.log('📧 Message ID:', info.messageId);
-      
-      return { success: true, messageId: info.messageId };
-    } catch (error) {
-      console.error('Error sending password reset email:', error);
-      throw new Error('Failed to send password reset email');
-    }
-  }
-
   // HTML template for password reset email
   getPasswordResetEmailTemplate(resetCode) {
     return `
@@ -174,9 +172,9 @@ CUHK Course Planner Team
         <style>
           body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
           .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-          .header { background: #dc2626; color: white; padding: 20px; text-align: center; }
+          .header { background: #1e40af; color: white; padding: 20px; text-align: center; }
           .content { padding: 20px; background: #f9fafb; }
-          .code { font-size: 32px; font-weight: bold; color: #dc2626; text-align: center; padding: 20px; background: #e5e7eb; border-radius: 8px; margin: 20px 0; letter-spacing: 4px; }
+          .code { font-size: 32px; font-weight: bold; color: #1e40af; text-align: center; padding: 20px; background: #e5e7eb; border-radius: 8px; margin: 20px 0; letter-spacing: 4px; }
           .footer { text-align: center; padding: 20px; color: #6b7280; font-size: 14px; }
         </style>
       </head>
@@ -187,10 +185,10 @@ CUHK Course Planner Team
           </div>
           <div class="content">
             <h2>Reset Your Password</h2>
-            <p>You requested to reset your password for your CUHK Course Planner account.</p>
-            <p>Your password reset code is:</p>
+            <p>You requested to reset your password for CUHK Course Planner.</p>
+            <p>Your reset code is:</p>
             <div class="code">${resetCode}</div>
-            <p><strong>Please enter this code in the password reset page within 10 minutes.</strong></p>
+            <p><strong>Please enter this code in the password reset page within 1 minute.</strong></p>
             <p>If you didn't request a password reset, you can safely ignore this email.</p>
           </div>
           <div class="footer">
@@ -207,11 +205,11 @@ CUHK Course Planner Team
     return `
 CUHK Course Planner - Reset Your Password
 
-You requested to reset your password for your CUHK Course Planner account.
+You requested to reset your password for CUHK Course Planner.
 
-Your password reset code is: ${resetCode}
+Your reset code is: ${resetCode}
 
-Please enter this code in the password reset page within 10 minutes.
+Please enter this code in the password reset page within 1 minute.
 
 If you didn't request a password reset, you can safely ignore this email.
 
@@ -219,6 +217,8 @@ Best regards,
 CUHK Course Planner Team
     `;
   }
+
+
 
   // Test email service
   async testConnection() {

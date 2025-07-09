@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
-const userSchema = new mongoose.Schema({
+const pendingRegistrationSchema = new mongoose.Schema({
   email: {
     type: String,
     required: [true, 'Email is required'],
@@ -37,32 +37,29 @@ const userSchema = new mongoose.Schema({
       message: 'Password must be at least 6 characters long and contain at least 1 uppercase letter, 1 lowercase letter, and 1 digit'
     }
   },
-  isEmailVerified: {
-    type: Boolean,
-    default: false
-  },
-  resetCode: {
+  verificationCode: {
     type: String,
-    default: null
+    required: true
   },
-  resetCodeExpires: {
+  verificationCodeExpires: {
     type: Date,
-    default: null
+    required: true
   },
   createdAt: {
     type: Date,
-    default: Date.now
-  },
-  lastLogin: {
-    type: Date,
-    default: null
+    default: Date.now,
+    expires: 300 // Auto-delete after 5 minutes
   }
 }, {
   timestamps: true
 });
 
+// Index for faster queries
+pendingRegistrationSchema.index({ verificationCode: 1 });
+pendingRegistrationSchema.index({ email: 1 });
+
 // Pre-save middleware to hash password
-userSchema.pre('save', async function(next) {
+pendingRegistrationSchema.pre('save', async function(next) {
   // Only hash the password if it has been modified (or is new)
   if (!this.isModified('password')) return next();
   
@@ -76,9 +73,17 @@ userSchema.pre('save', async function(next) {
   }
 });
 
-// Instance method to compare password
-userSchema.methods.comparePassword = async function(candidatePassword) {
-  return await bcrypt.compare(candidatePassword, this.password);
+// Method to compare password
+pendingRegistrationSchema.methods.comparePassword = async function(candidatePassword) {
+  return bcrypt.compare(candidatePassword, this.password);
 };
 
-module.exports = mongoose.model('User', userSchema); 
+// Static method to find by verification code
+pendingRegistrationSchema.statics.findByVerificationCode = function(code) {
+  return this.findOne({
+    verificationCode: code,
+    verificationCodeExpires: { $gt: new Date() }
+  });
+};
+
+module.exports = mongoose.model('PendingRegistration', pendingRegistrationSchema); 

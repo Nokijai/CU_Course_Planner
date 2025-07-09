@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Search, Filter, Calendar, Heart, BookOpen, Users, Clock, X, Plus, Check } from 'lucide-react';
+import { Search, Filter, Calendar, Heart, BookOpen, Users, Clock, X, Plus, Check, ChevronLeft, ChevronRight } from 'lucide-react';
 import { getSchedule, saveSchedule, getFavorites, saveFavorites } from '../utils/localStorage';
 
 function CourseSearchPage() {
@@ -609,7 +609,7 @@ function CourseSearchPage() {
               {results.length} course{results.length !== 1 ? 's' : ''} found (of {pagination.totalCourses} total)
             </h2>
             <div className="flex items-center gap-4">
-              {totalPages > 1 && (
+              {pagination.totalPages > 1 && (
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => handlePageChange(currentPage - 1)}
@@ -625,14 +625,14 @@ function CourseSearchPage() {
                   </button>
                   
                   <div className="flex items-center gap-1">
-                    {Array.from({ length: Math.min(3, totalPages) }, (_, i) => {
+                    {Array.from({ length: Math.min(3, pagination.totalPages) }, (_, i) => {
                       let pageNum;
-                      if (totalPages <= 3) {
+                      if (pagination.totalPages <= 3) {
                         pageNum = i + 1;
                       } else if (currentPage <= 2) {
                         pageNum = i + 1;
-                      } else if (currentPage >= totalPages - 1) {
-                        pageNum = totalPages - 2 + i;
+                      } else if (currentPage >= pagination.totalPages - 1) {
+                        pageNum = pagination.totalPages - 2 + i;
                       } else {
                         pageNum = currentPage - 1 + i;
                       }
@@ -655,9 +655,9 @@ function CourseSearchPage() {
                   
                   <button
                     onClick={() => handlePageChange(currentPage + 1)}
-                    disabled={currentPage === totalPages}
+                    disabled={currentPage === pagination.totalPages}
                     className={`flex items-center gap-1 px-2 py-1 rounded text-sm font-medium transition-colors ${
-                      currentPage === totalPages
+                      currentPage === pagination.totalPages
                         ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                         : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
                     }`}

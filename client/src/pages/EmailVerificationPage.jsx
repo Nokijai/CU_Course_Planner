@@ -12,7 +12,7 @@ const EmailVerificationPage = () => {
   
   const navigate = useNavigate();
   const location = useLocation();
-  const { resendVerification } = useAuth();
+  const { resendVerification, verifyEmail } = useAuth();
   
   const email = location.state?.email;
 
@@ -59,21 +59,13 @@ const EmailVerificationPage = () => {
 
     setIsLoading(true);
     try {
-      const response = await fetch('/api/auth/verify-email', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email, code }),
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        toast.success('Email verified successfully!');
-        navigate('/login');
+      const result = await verifyEmail(email, code);
+      
+      if (result.success) {
+        // User is now verified and logged in, redirect to home page
+        navigate('/');
       } else {
-        toast.error(data.message || 'Verification failed');
+        toast.error(result.error || 'Verification failed');
       }
     } catch (error) {
       toast.error('Verification failed. Please try again.');

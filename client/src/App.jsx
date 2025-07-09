@@ -7,6 +7,7 @@ import Footer from './components/Footer';
 import ProtectedRoute from './components/ProtectedRoute';
 import LoginPage from './pages/LoginPage';
 import EmailVerificationPage from './pages/EmailVerificationPage';
+import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import HomePage from './pages/HomePage';
 import CourseSearchPage from './pages/CourseSearchPage';
 import CourseDetailPage from './pages/CourseDetailPage';
@@ -25,6 +26,7 @@ function App() {
                   <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/verify-email" element={<EmailVerificationPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
             <Route path="/" element={
               <ProtectedRoute>
                 <HomePage />

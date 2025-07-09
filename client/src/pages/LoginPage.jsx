@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { BookOpen, Mail, Lock, Eye, EyeOff, Loader2 } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 const LoginPage = () => {
   const [isLogin, setIsLogin] = useState(true);
@@ -14,11 +15,47 @@ const LoginPage = () => {
   const { login, register, resendVerification } = useAuth();
   const navigate = useNavigate();
 
+  // Password validation function
+  const validatePassword = (password) => {
+    const hasUpperCase = /[A-Z]/.test(password);
+    const hasLowerCase = /[a-z]/.test(password);
+    const hasDigit = /\d/.test(password);
+    const hasMinLength = password.length >= 6;
+
+    const errors = [];
+    if (!hasMinLength) errors.push('at least 6 characters');
+    if (!hasUpperCase) errors.push('1 uppercase letter');
+    if (!hasLowerCase) errors.push('1 lowercase letter');
+    if (!hasDigit) errors.push('1 digit');
+
+    return {
+      isValid: hasUpperCase && hasLowerCase && hasDigit && hasMinLength,
+      errors,
+      checks: {
+        hasMinLength,
+        hasUpperCase,
+        hasLowerCase,
+        hasDigit
+      }
+    };
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsLoading(true);
 
     try {
+      // Password validation for registration
+      if (!isLogin) {
+        const passwordValidation = validatePassword(password);
+        if (!passwordValidation.isValid) {
+          const errorMessage = `Password must contain: ${passwordValidation.errors.join(', ')}`;
+          toast.error(errorMessage);
+          setIsLoading(false);
+          return;
+        }
+      }
+
       console.log('Starting auth process...', { isLogin, email });
       const result = isLogin 
         ? await login(email, password)
@@ -52,7 +89,11 @@ const LoginPage = () => {
     
     setResendLoading(true);
     try {
-      await resendVerification(email);
+      const result = await resendVerification(email);
+      if (result.success) {
+        // Redirect to verification page after successfully resending
+        navigate('/verify-email', { state: { email } });
+      }
     } finally {
       setResendLoading(false);
     }
@@ -135,7 +176,7 @@ const LoginPage = () => {
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   className="w-full pl-10 pr-12 py-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Enter your password"
+                  placeholder={isLogin ? "Enter your password" : "Enter password (6+ chars, 1 upper, 1 lower, 1 digit)"}
                   minLength={6}
                 />
                 <button
@@ -146,7 +187,50 @@ const LoginPage = () => {
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
+              {!isLogin && (
+                <div className="mt-2 p-3 bg-blue-50 rounded-md">
+                  <p className="text-xs text-blue-800 font-medium mb-2">Password Requirements:</p>
+                  <div className="space-y-1">
+                    <div className={`flex items-center text-xs ${validatePassword(password).checks.hasMinLength ? 'text-green-600' : 'text-gray-500'}`}>
+                      <span className="mr-2">
+                        {validatePassword(password).checks.hasMinLength ? '✓' : '○'}
+                      </span>
+                      At least 6 characters long
+                    </div>
+                    <div className={`flex items-center text-xs ${validatePassword(password).checks.hasUpperCase ? 'text-green-600' : 'text-gray-500'}`}>
+                      <span className="mr-2">
+                        {validatePassword(password).checks.hasUpperCase ? '✓' : '○'}
+                      </span>
+                      At least 1 uppercase letter (A-Z)
+                    </div>
+                    <div className={`flex items-center text-xs ${validatePassword(password).checks.hasLowerCase ? 'text-green-600' : 'text-gray-500'}`}>
+                      <span className="mr-2">
+                        {validatePassword(password).checks.hasLowerCase ? '✓' : '○'}
+                      </span>
+                      At least 1 lowercase letter (a-z)
+                    </div>
+                    <div className={`flex items-center text-xs ${validatePassword(password).checks.hasDigit ? 'text-green-600' : 'text-gray-500'}`}>
+                      <span className="mr-2">
+                        {validatePassword(password).checks.hasDigit ? '✓' : '○'}
+                      </span>
+                      At least 1 digit (0-9)
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
+
+            {/* Forgot Password Link - Only show on login */}
+            {isLogin && (
+              <div className="text-right">
+                <Link
+                  to="/forgot-password"
+                  className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                >
+                  Forgot your password?
+                </Link>
+              </div>
+            )}
 
             {/* Submit Button */}
             <button
