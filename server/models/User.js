@@ -14,7 +14,8 @@ const userSchema = new mongoose.Schema({
   password: {
     type: String,
     required: [true, 'Password is required'],
-    minlength: [6, 'Password must be at least 6 characters long']
+    minlength: [6, 'Password must be at least 6 characters long'],
+    match: [/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).+$/, 'Password must contain at least one uppercase letter, one lowercase letter, and one digit']
   },
   isEmailVerified: {
     type: Boolean,
@@ -28,9 +29,17 @@ const userSchema = new mongoose.Schema({
     type: Date,
     default: null
   },
+  passwordResetCode: {
+    type: String,
+    default: null
+  },
+  passwordResetCodeExpires: {
+    type: Date,
+    default: null
+  },
   createdAt: {
     type: Date,
-    default: Date.now
+    default: null // Will be set after email verification
   },
   lastLogin: {
     type: Date,
@@ -71,9 +80,22 @@ userSchema.methods.isVerificationCodeExpired = function() {
 
 // Static method to find user by verification code
 userSchema.statics.findByVerificationCode = function(code) {
-  return this.findOne({ 
+  console.log('Searching for user with code:', code);
+  const query = { 
     verificationCode: code,
     verificationCodeExpires: { $gt: Date.now() }
+  };
+  console.log('Query:', query);
+  return this.findOne(query);
+};
+
+// Static method to cleanup unverified users
+userSchema.statics.cleanupUnverifiedUsers = function() {
+  const cutoffTime = new Date(Date.now() - 10 * 60 * 1000); // 10 minutes ago
+  return this.deleteMany({
+    isEmailVerified: false,
+    createdAt: null,
+    verificationCodeExpires: { $lt: cutoffTime }
   });
 };
 
