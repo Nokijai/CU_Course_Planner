@@ -44,8 +44,15 @@ function SchedulePage() {
     setVisibleCourses(initialVisibleCourses);
     setVisibleSections(initialVisibleSections);
     
-    // Calculate total units
-    const units = savedSchedule.reduce((sum, course) => sum + (parseFloat(course.units) || 0), 0);
+    // Calculate total units (count once per unique course, not per section)
+    const uniqueCourses = new Map();
+    savedSchedule.forEach(course => {
+      const courseKey = `${course.subject}-${course.code}`;
+      if (!uniqueCourses.has(courseKey)) {
+        uniqueCourses.set(courseKey, course);
+      }
+    });
+    const units = Array.from(uniqueCourses.values()).reduce((sum, course) => sum + (parseFloat(course.units) || 0), 0);
     setTotalCredits(units);
     
     // Check for conflicts
@@ -69,8 +76,15 @@ function SchedulePage() {
       return newSet;
     });
     
-    // Recalculate units and conflicts
-    const units = updated.reduce((sum, course) => sum + (parseFloat(course.units) || 0), 0);
+    // Recalculate units and conflicts (count once per unique course, not per section)
+    const uniqueCourses = new Map();
+    updated.forEach(course => {
+      const courseKey = `${course.subject}-${course.code}`;
+      if (!uniqueCourses.has(courseKey)) {
+        uniqueCourses.set(courseKey, course);
+      }
+    });
+    const units = Array.from(uniqueCourses.values()).reduce((sum, course) => sum + (parseFloat(course.units) || 0), 0);
     setTotalCredits(units);
     
     const scheduleConflicts = validateSchedule(updated);
@@ -120,8 +134,15 @@ function SchedulePage() {
       return newSet;
     });
     
-    // Recalculate units and conflicts
-    const units = updated.reduce((sum, course) => sum + (parseFloat(course.units) || 0), 0);
+    // Recalculate units and conflicts (count once per unique course, not per section)
+    const uniqueCourses = new Map();
+    updated.forEach(course => {
+      const courseKey = `${course.subject}-${course.code}`;
+      if (!uniqueCourses.has(courseKey)) {
+        uniqueCourses.set(courseKey, course);
+      }
+    });
+    const units = Array.from(uniqueCourses.values()).reduce((sum, course) => sum + (parseFloat(course.units) || 0), 0);
     setTotalCredits(units);
     
     const scheduleConflicts = validateSchedule(updated);
@@ -181,8 +202,15 @@ function SchedulePage() {
       return newSet;
     });
     
-    // Recalculate units and conflicts
-    const units = savedSchedule.reduce((sum, course) => sum + (parseFloat(course.units) || 0), 0);
+    // Recalculate units and conflicts (count once per unique course, not per section)
+    const uniqueCourses = new Map();
+    savedSchedule.forEach(course => {
+      const courseKey = `${course.subject}-${course.code}`;
+      if (!uniqueCourses.has(courseKey)) {
+        uniqueCourses.set(courseKey, course);
+      }
+    });
+    const units = Array.from(uniqueCourses.values()).reduce((sum, course) => sum + (parseFloat(course.units) || 0), 0);
     setTotalCredits(units);
     
     const scheduleConflicts = validateSchedule(savedSchedule);
@@ -500,7 +528,7 @@ function SchedulePage() {
             <h2 className="text-lg font-semibold text-gray-900">Search Courses</h2>
           </div>
           <div className="flex-1 overflow-y-auto">
-            <CourseSearchBox onCourseSelect={handleCourseAdded} compact={true} />
+            <CourseSearchBox onCourseSelect={handleCourseAdded} compact={true} disableExpansion={false} />
           </div>
         </div>
 
@@ -706,7 +734,6 @@ function SchedulePage() {
                                     style={{
                                       height: isHovered ? 'auto' : `${Math.max(48, slot.duration * 48)}px`,
                                       minHeight: isHovered ? '160px' : `${Math.max(48, slot.duration * 48)}px`,
-                                      width: 'calc(100% - 8px)',
                                       maxWidth: 'calc(100% - 8px)',
                                       whiteSpace: isHovered ? 'normal' : 'nowrap',
                                       padding: isHovered ? '14px 12px' : '6px',
