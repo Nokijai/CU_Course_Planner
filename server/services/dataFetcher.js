@@ -577,7 +577,16 @@ class DataFetcher {
       if (!courses || courses.length === 0) {
         return null;
       }
-      return courses.find(course => course.subject === subject && course.code === code);
+      
+      // Find the course with the exact subject and code match
+      const course = courses.find(course => course.subject === subject && course.code === code);
+      
+      if (!course) {
+        return null;
+      }
+      
+      // Return the complete course data including terms
+      return course;
     } catch (error) {
       console.error('Error getting course by subject and code:', error);
       return null;
